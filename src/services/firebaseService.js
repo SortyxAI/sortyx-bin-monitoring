@@ -1,6 +1,6 @@
 import { database, db } from '../config/firebase';
 import { ref, onValue, push, set, get, query, orderByChild, limitToLast, orderByKey, child } from 'firebase/database';
-import { collection, getDocs, doc, getDoc, onSnapshot, orderBy, limit, where, query as firestoreQuery } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, onSnapshot, orderBy, limit, where, query as firestoreQuery } from 'firebase/firestore';
 
 export class FirebaseService {
   
@@ -217,53 +217,86 @@ export class FirebaseService {
     return Math.round(fillLevel);
   }
 
-  // Get smart bins from Firebase
+  // Get smart bins from Firestore with live sensor data
   static async getSmartBins() {
     try {
-      const binsRef = ref(database, 'smart-bins');
-      const snapshot = await get(binsRef);
-      const data = snapshot.val();
+      console.log('📦 Fetching smart bins from Firestore...');
       
-      if (data) {
-        return Object.entries(data).map(([id, bin]) => ({
-          id,
-          ...bin
-        }));
+      // Get bins from Firestore
+      const binsCollection = collection(db, 'smart-bins');
+      const binsSnapshot = await getDocs(binsCollection);
+      
+      if (!binsSnapshot.empty) {
+        const bins = [];
+        
+        for (const binDoc of binsSnapshot.docs) {
+          const binData = { id: binDoc.id, ...binDoc.data() };
+          
+          // If bin has a device_id, get live sensor data
+          if (binData.device_id || binData.deviceId) {
+            const deviceId = binData.device_id || binData.deviceId;
+            console.log(`🔄 Getting live data for bin ${binData.name} with device ${deviceId}`);
+            const liveSensorData = await this.getLatestSensorData(deviceId);
+            
+            if (liveSensorData) {
+              // Merge live sensor data with bin configuration
+              binData.current_fill = liveSensorData.fillLevel || 0;
+              binData.fillLevel = liveSensorData.fillLevel || 0; // For compatibility
+              binData.battery_level = liveSensorData.battery || 0;
+              binData.battery = liveSensorData.battery || 0; // For compatibility
+              binData.distance = liveSensorData.distance || 0;
+              binData.current_sensor_data = liveSensorData;
+              binData.last_sensor_update = new Date().toISOString();
+              binData.lastUpdate = new Date().toISOString(); // For compatibility
+              
+              console.log(`✅ Updated ${binData.name} with live data:`, {
+                fillLevel: liveSensorData.fillLevel,
+                battery: liveSensorData.battery,
+                distance: liveSensorData.distance
+              });
+            }
+          }
+          
+          bins.push(binData);
+        }
+        
+        console.log(`📦 Retrieved ${bins.length} smart bins from Firestore`);
+        return bins;
       }
       
-      // Return mock data if no bins in Firebase
+      // Return mock data if no bins in Firestore
+      console.log('⚠️ No bins found in Firestore, returning mock data');
       return [
         {
           id: 'bin-1',
           name: 'Main Entrance Bin',
           location: 'Building A - Ground Floor',
           deviceId: 'sortyx-sensor-two',
+          device_id: 'sortyx-sensor-two',
           status: 'active',
-          fillLevel: 75,
-          battery: 85,
+          fillLevel: 0,
+          current_fill: 0,
+          battery: 0,
+          battery_level: 0,
+          distance: 0,
+          sensors_enabled: {
+            fill_level: true,
+            battery_level: true,
+            temperature: false,
+            humidity: false,
+            air_quality: false,
+            odour_detection: false
+          },
           lastUpdate: new Date().toISOString(),
+          last_sensor_update: new Date().toISOString(),
           compartments: [
-            { type: 'recyclable', fillLevel: 80, color: '#10b981' },
-            { type: 'general', fillLevel: 70, color: '#f59e0b' }
-          ]
-        },
-        {
-          id: 'bin-2',
-          name: 'Cafeteria Bin',
-          location: 'Building B - 1st Floor',
-          deviceId: 'plaese-work',
-          status: 'active',
-          fillLevel: 45,
-          battery: 92,
-          lastUpdate: new Date().toISOString(),
-          compartments: [
-            { type: 'organic', fillLevel: 50, color: '#8b5cf6' },
-            { type: 'general', fillLevel: 40, color: '#f59e0b' }
+            { type: 'recyclable', fillLevel: 0, color: '#10b981', current_fill: 0 },
+            { type: 'general', fillLevel: 0, color: '#f59e0b', current_fill: 0 }
           ]
         }
       ];
     } catch (error) {
-      console.error('Error fetching smart bins:', error);
+      console.error('❌ Error fetching smart bins:', error);
       return [];
     }
   }
@@ -377,33 +410,49 @@ export class FirebaseService {
     }
   }
 
-  // Save smart bin to Firebase
+  // Save smart bin to Firestore
   static async saveSmartBin(binData) {
     try {
-      const binsRef = ref(database, 'smart-bins');
+      console.log('💾 Saving smart bin to Firestore:', binData);
+      
+      // Use Firestore for bin storage with better structure
+      const binsCollection = collection(db, 'smart-bins');
       
       if (binData.id) {
         // Update existing bin
-        const binRef = ref(database, `smart-bins/${binData.id}`);
-        await set(binRef, {
+        const binDoc = doc(db, 'smart-bins', binData.id);
+        const updatedData = {
           ...binData,
-          updatedAt: new Date().toISOString()
-        });
-        return { ...binData, updatedAt: new Date().toISOString() };
-      } else {
-        // Create new bin
-        const newBinRef = push(binsRef);
-        const newBinData = {
-          ...binData,
-          id: newBinRef.key,
-          createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
-        await set(newBinRef, newBinData);
+        await setDoc(binDoc, updatedData);
+        console.log('✅ Updated existing bin:', updatedData);
+        return updatedData;
+      } else {
+        // Create new bin with proper structure
+        const newBinData = {
+          ...binData,
+          id: Date.now().toString(), // Simple ID generation
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          // Ensure sensor data structure
+          sensors_enabled: binData.sensors_enabled || {},
+          current_sensor_data: binData.current_sensor_data || {},
+          device_id: binData.deviceId || binData.device_id,
+          // Calculate fill level from sensor data if available
+          current_fill: binData.current_sensor_data?.fillLevel || 0,
+          battery_level: binData.current_sensor_data?.battery || 0,
+          distance: binData.current_sensor_data?.distance || 0,
+          last_sensor_update: new Date().toISOString()
+        };
+        
+        const newBinDoc = doc(db, 'smart-bins', newBinData.id);
+        await setDoc(newBinDoc, newBinData);
+        console.log('✅ Created new bin:', newBinData);
         return newBinData;
       }
     } catch (error) {
-      console.error('Error saving smart bin:', error);
+      console.error('❌ Error saving smart bin:', error);
       throw error;
     }
   }
@@ -413,9 +462,45 @@ export class FirebaseService {
     return this.saveSmartBin(binData);
   }
 
-  // Get single bins from Firebase (alias for getSmartBins)
+  // Update bin sensor configuration
+  static async updateBinSensorConfig(binId, sensorConfig) {
+    try {
+      console.log(`🔧 Updating sensor config for bin ${binId}:`, sensorConfig);
+      
+      const binDoc = doc(db, 'smart-bins', binId);
+      const updates = {
+        sensors_enabled: sensorConfig,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await setDoc(binDoc, updates, { merge: true });
+      console.log(`✅ Updated sensor config for bin ${binId}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error updating sensor config for bin ${binId}:`, error);
+      throw error;
+    }
+  }
+
+  // Get single bins from Firestore (filtered by type)
   static async getSingleBins() {
-    return this.getSmartBins();
+    try {
+      console.log('📦 Fetching single bins from Firestore...');
+      
+      // Get all bins and filter for single bins
+      const allBins = await this.getSmartBins();
+      const singleBins = allBins.filter(bin => 
+        bin.type === 'single' || 
+        bin.bin_type === 'single' || 
+        (!bin.type && !bin.bin_type) // Default to single if no type specified
+      );
+      
+      console.log(`📦 Retrieved ${singleBins.length} single bins from ${allBins.length} total bins`);
+      return singleBins;
+    } catch (error) {
+      console.error('❌ Error fetching single bins:', error);
+      return [];
+    }
   }
 
   // Save compartment to Firebase

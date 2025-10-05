@@ -8,6 +8,7 @@ import { User } from "@/api/entities";
 import { FirebaseService } from "@/services/firebaseService";
 import { motion, AnimatePresence } from "framer-motion";
 import "@/utils/debugFirestore";
+import "@/utils/testBinIntegration";
 import { 
   Trash2, 
   Activity,

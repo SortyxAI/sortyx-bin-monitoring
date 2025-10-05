@@ -213,19 +213,51 @@ const AddBinModal = ({ isOpen, onClose, onAddBin, binType = 'smartbin' }) => {
 
     setLoading(true);
     try {
+      // Get current sensor data for the selected device
+      const currentSensorData = realTimePreview || {};
+      const fillLevel = calculateFillLevel(currentSensorData.distance, formData.binHeight);
+      
       const newBin = {
         id: `bin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: formData.name,
         location: formData.location,
         deviceId: formData.deviceId,
+        device_id: formData.deviceId, // For Firestore compatibility
         capacity: formData.capacity,
         binHeight: formData.binHeight,
         wasteTypes: binType === 'smartbin' ? formData.wasteTypes : ['mixed'],
         description: formData.description,
         type: binType,
+        bin_type: binType === 'smartbin' ? 'smart' : 'single',
         status: 'active',
         created_date: new Date().toISOString(),
         created_by: 'admin@sortyx.com',
+        
+        // Sensor Configuration - based on what sensors are available for this device
+        sensors_enabled: {
+          fill_level: true, // Always enabled if device has distance sensor
+          battery_level: Boolean(currentSensorData.battery !== undefined),
+          temperature: false, // Can be enabled later
+          humidity: false,
+          air_quality: false,
+          odour_detection: false
+        },
+        
+        // Current sensor data from IoT device
+        current_fill: fillLevel,
+        fillLevel: fillLevel, // For compatibility
+        battery_level: currentSensorData.battery || 0,
+        battery: currentSensorData.battery || 0, // For compatibility
+        distance: currentSensorData.distance || 0,
+        current_sensor_data: currentSensorData,
+        last_sensor_update: new Date().toISOString(),
+        lastUpdate: new Date().toISOString(), // For compatibility
+        
+        // Alert thresholds
+        fill_threshold: 80,
+        battery_threshold: 20,
+        temp_threshold: 50,
+        
         // IoT Configuration
         iotConfig: {
           applicationId: selectedDevice?.applicationId,
