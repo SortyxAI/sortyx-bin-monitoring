@@ -10,7 +10,18 @@ const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-key';
 
 // Middleware
-app.use(cors());
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? [
+        'https://sortyx-bin-monitoring-frontend.onrender.com',
+        'https://sortyx-frontend.onrender.com',
+        'https://sortyx-smart-bin.onrender.com',
+        'https://your-custom-domain.com'
+      ]
+    : ['http://localhost:5173', 'http://localhost:5174'],
+  credentials: true
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // In-memory data store (replace with your database)
