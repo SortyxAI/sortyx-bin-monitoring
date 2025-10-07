@@ -237,12 +237,14 @@ export default function SmartBins() {
   const handleDeleteBin = async (binId) => {
     if (window.confirm('Are you sure you want to delete this SmartBin? All compartments will also be deleted.')) {
       try {
-        const binCompartments = compartments.filter(c => c.smartbin_id === binId);
-        await Promise.all(binCompartments.map(c => Compartment.delete(c.id)));
-        await SmartBin.delete(binId);
+        console.log('Deleting smart bin:', binId);
+        await FirebaseService.deleteSmartBin(binId);
+        console.log('Smart bin deleted successfully');
+        alert('Smart bin and its compartments deleted successfully!');
         loadData();
       } catch (error) {
         console.error("Error deleting SmartBin:", error);
+        alert(`Failed to delete smart bin: ${error.message}`);
       }
     }
   };
@@ -265,10 +267,14 @@ export default function SmartBins() {
   const handleDeleteSingleBin = async (singleBinId) => {
     if (window.confirm('Are you sure you want to delete this SingleBin?')) {
       try {
-        await SingleBin.delete(singleBinId);
+        console.log('Deleting single bin:', singleBinId);
+        await FirebaseService.deleteSingleBin(singleBinId);
+        console.log('Single bin deleted successfully');
+        alert('Single bin deleted successfully!');
         loadData();
       } catch (error) {
         console.error("Error deleting SingleBin:", error);
+        alert(`Failed to delete single bin: ${error.message}`);
       }
     }
   };

@@ -686,9 +686,23 @@ export class FirebaseService {
   static async deleteCompartment(compartmentId) {
     try {
       console.log(`🗑️ Deleting compartment ${compartmentId} from Firestore...`);
+      
+      // Delete the compartment document
       const compartmentDoc = doc(db, 'compartments', compartmentId);
       await deleteDoc(compartmentDoc);
-      console.log(`✅ Deleted compartment ${compartmentId}`);
+      
+      // Delete all alerts associated with this compartment
+      const alertsCollection = collection(db, 'alerts');
+      const alertsQuery = firestoreQuery(
+        alertsCollection,
+        where('compartmentId', '==', compartmentId)
+      );
+      const alertsSnapshot = await getDocs(alertsQuery);
+      
+      const alertDeletePromises = alertsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(alertDeletePromises);
+      
+      console.log(`✅ Deleted compartment ${compartmentId} and ${alertsSnapshot.size} alerts`);
       return true;
     } catch (error) {
       console.error(`❌ Error deleting compartment ${compartmentId}:`, error);
@@ -848,24 +862,69 @@ export class FirebaseService {
     }
   }
 
-  // Delete smart bin
+  // Delete smart bin from Firestore
   static async deleteSmartBin(binId) {
     try {
-      const binRef = ref(database, `smart-bins/${binId}`);
-      await set(binRef, null);
+      console.log(`🗑️ Deleting smart bin ${binId} from Firestore...`);
+      
+      // Delete the bin document
+      const binDoc = doc(db, 'smart-bins', binId);
+      await deleteDoc(binDoc);
+      
+      // Delete all compartments associated with this bin
+      const compartmentsCollection = collection(db, 'compartments');
+      const compartmentsQuery = firestoreQuery(
+        compartmentsCollection,
+        where('smartBinId', '==', binId)
+      );
+      const compartmentsSnapshot = await getDocs(compartmentsQuery);
+      
+      const compartmentDeletePromises = compartmentsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(compartmentDeletePromises);
+      
+      // Delete all alerts associated with this bin
+      const alertsCollection = collection(db, 'alerts');
+      const alertsQuery = firestoreQuery(
+        alertsCollection,
+        where('binId', '==', binId)
+      );
+      const alertsSnapshot = await getDocs(alertsQuery);
+      
+      const alertDeletePromises = alertsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(alertDeletePromises);
+      
+      console.log(`✅ Deleted smart bin ${binId}, ${compartmentsSnapshot.size} compartments, and ${alertsSnapshot.size} alerts`);
+      return true;
     } catch (error) {
-      console.error('Error deleting smart bin:', error);
+      console.error(`❌ Error deleting smart bin ${binId}:`, error);
       throw error;
     }
   }
 
-  // Delete compartment
-  static async deleteCompartment(compartmentId) {
+  // Delete single bin from Firestore
+  static async deleteSingleBin(binId) {
     try {
-      const compartmentRef = ref(database, `compartments/${compartmentId}`);
-      await set(compartmentRef, null);
+      console.log(`🗑️ Deleting single bin ${binId} from Firestore...`);
+      
+      // Delete the bin document
+      const binDoc = doc(db, 'single-bins', binId);
+      await deleteDoc(binDoc);
+      
+      // Delete all alerts associated with this bin
+      const alertsCollection = collection(db, 'alerts');
+      const alertsQuery = firestoreQuery(
+        alertsCollection,
+        where('binId', '==', binId)
+      );
+      const alertsSnapshot = await getDocs(alertsQuery);
+      
+      const alertDeletePromises = alertsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(alertDeletePromises);
+      
+      console.log(`✅ Deleted single bin ${binId} and ${alertsSnapshot.size} alerts`);
+      return true;
     } catch (error) {
-      console.error('Error deleting compartment:', error);
+      console.error(`❌ Error deleting single bin ${binId}:`, error);
       throw error;
     }
   }
