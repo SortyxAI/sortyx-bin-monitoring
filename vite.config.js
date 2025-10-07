@@ -6,7 +6,13 @@ import path from 'path'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: '0.0.0.0',
+    port: process.env.PORT || 5173,
     allowedHosts: true
+  },
+  preview: {
+    host: '0.0.0.0',
+    port: process.env.PORT || 4173
   },
   resolve: {
     alias: {
