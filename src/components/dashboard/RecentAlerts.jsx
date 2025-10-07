@@ -9,21 +9,23 @@ import { createPageUrl } from "@/utils";
 import { format } from "date-fns";
 
 export default function RecentAlerts({ alerts }) {
-  const sortedAlerts = alerts.slice(0, 5);
+  const sortedAlerts = (alerts || []).slice(0, 5);
 
   const getSeverityColor = (severity) => {
     switch (severity) {
       case 'critical': return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700';
-      case 'warning': return 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-700';
+      case 'high': return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-700';
+      case 'medium': return 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-700';
       default: return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700';
     }
   };
 
   const getSeverityIcon = (severity) => {
     switch (severity) {
-      case 'critical': return <AlertTriangle className="w-4 h-4" />;
-      case 'warning': return <Clock className="w-4 h-4" />;
-      default: return <CheckCircle className="w-4 h-4" />;
+      case 'critical': return <AlertTriangle className="w-4 h-4 text-red-600" />;
+      case 'high': return <AlertTriangle className="w-4 h-4 text-orange-600" />;
+      case 'medium': return <Clock className="w-4 h-4 text-yellow-600" />;
+      default: return <CheckCircle className="w-4 h-4 text-blue-600" />;
     }
   };
 
@@ -68,18 +70,18 @@ export default function RecentAlerts({ alerts }) {
                       {alert.severity}
                     </Badge>
                     <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {format(new Date(alert.created_date), 'HH:mm')}
+                      {format(new Date(alert.timestamp), 'HH:mm')}
                     </span>
                   </div>
                   <p className="text-sm text-gray-900 dark:text-white font-medium">
-                    {alert.alert_type.replace('_', ' ').toUpperCase()}
+                    {alert.binName}
                   </p>
                   <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
                     {alert.message}
                   </p>
-                  {alert.value && (
+                  {alert.currentValue !== null && alert.threshold !== null && (
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Value: {alert.value} / Threshold: {alert.threshold}
+                      {alert.currentValue}{alert.unit} / {alert.threshold}{alert.unit}
                     </p>
                   )}
                 </div>

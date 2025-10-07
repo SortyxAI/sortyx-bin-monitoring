@@ -110,8 +110,8 @@ export default function Dashboard() {
             console.error("SingleBin.list error:", err);
             return [];
           }),
-          AlertEntity.filter({ resolved: false }).catch(err => {
-            console.error("AlertEntity.filter error:", err);
+          FirebaseService.getAlerts().catch(err => {
+            console.error("FirebaseService.getAlerts error:", err);
             return [];
           }),
           FirebaseService.getSmartBins().catch(err => {
@@ -130,6 +130,7 @@ export default function Dashboard() {
         
         console.log("Firebase SmartBins:", firebaseSmartBins);
         console.log("Firebase SingleBins:", firebaseSingleBins);
+        console.log("Firebase Alerts:", alertData);
         
         console.log("Firebase API responses:", { 
           smartBinData, 

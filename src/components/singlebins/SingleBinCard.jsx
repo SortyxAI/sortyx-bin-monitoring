@@ -62,63 +62,69 @@ export default function SingleBinCard({ singleBin, onEdit, onDelete, onCardClick
 
   const sensorData = [];
   
-  if (singleBin.sensors_enabled?.fill_level && singleBin.current_fill !== undefined) {
+  // Show sensor only if it's enabled in sensors_enabled configuration
+  // If sensor is enabled but has no data, show 0
+  if (singleBin.sensors_enabled?.fill_level) {
     sensorData.push({
       type: 'fill_level',
-      value: singleBin.current_fill,
+      value: singleBin.current_fill ?? 0,
       unit: '%',
       icon: BarChart3,
       color: fillPercentage > 90 ? 'text-red-500' : fillPercentage > 70 ? 'text-yellow-500' : 'text-green-500'
     });
   }
   
-  if (singleBin.sensors_enabled?.temperature && singleBin.temperature !== undefined) {
+  if (singleBin.sensors_enabled?.temperature) {
+    const tempValue = singleBin.temperature ?? 0;
     sensorData.push({
       type: 'temperature',
-      value: singleBin.temperature,
+      value: tempValue,
       unit: '°C',
       icon: Thermometer,
-      color: singleBin.temperature > (singleBin.temp_threshold || 50) ? 'text-red-500' : 'text-blue-500'
+      color: tempValue > (singleBin.temp_threshold || 50) ? 'text-red-500' : 'text-blue-500'
     });
   }
   
-  if (singleBin.sensors_enabled?.humidity && singleBin.humidity !== undefined) {
+  if (singleBin.sensors_enabled?.humidity) {
     sensorData.push({
       type: 'humidity',
-      value: singleBin.humidity,
+      value: singleBin.humidity ?? 0,
       unit: '%',
       icon: Droplets,
       color: 'text-blue-400'
     });
   }
   
-  if (singleBin.sensors_enabled?.air_quality && singleBin.air_quality !== undefined) {
+  if (singleBin.sensors_enabled?.air_quality) {
+    const aqValue = singleBin.air_quality ?? 0;
     sensorData.push({
       type: 'air_quality',
-      value: singleBin.air_quality,
+      value: aqValue,
       unit: 'AQI',
       icon: Wind,
-      color: singleBin.air_quality > 150 ? 'text-red-500' : singleBin.air_quality > 100 ? 'text-yellow-500' : 'text-green-500'
+      color: aqValue > 150 ? 'text-red-500' : aqValue > 100 ? 'text-yellow-500' : 'text-green-500'
     });
   }
 
-  if (singleBin.sensors_enabled?.battery_level && singleBin.battery_level !== undefined) {
+  if (singleBin.sensors_enabled?.battery_level) {
+    const batteryValue = singleBin.battery_level ?? 0;
     sensorData.push({
       type: 'battery_level',
-      value: singleBin.battery_level,
+      value: batteryValue,
       unit: '%',
       icon: Battery,
-      color: singleBin.battery_level < 20 ? 'text-red-500' : singleBin.battery_level < 50 ? 'text-yellow-500' : 'text-green-500'
+      color: batteryValue < 20 ? 'text-red-500' : batteryValue < 50 ? 'text-yellow-500' : 'text-green-500'
     });
   }
 
-  if (singleBin.sensors_enabled?.odour_detection && singleBin.odour_level !== undefined) {
+  if (singleBin.sensors_enabled?.odour_detection) {
+    const odourValue = singleBin.odour_level ?? 0;
     sensorData.push({
       type: 'odour',
-      value: singleBin.odour_level,
+      value: odourValue,
       unit: '',
       icon: Scan,
-      color: singleBin.odour_level > 70 ? 'text-red-500' : 'text-green-500'
+      color: odourValue > 70 ? 'text-red-500' : 'text-green-500'
     });
   }
 

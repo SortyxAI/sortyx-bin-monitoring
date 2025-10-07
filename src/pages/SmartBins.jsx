@@ -32,6 +32,7 @@ import SingleBinForm from "../components/singlebins/SingleBinForm";
 import SingleBinCard from "../components/singlebins/SingleBinCard";
 import BinDetailsModal from "../components/modals/BinDetailsModal";
 import AddBinModal from "../components/modals/AddBinModal";
+import ImprovedAddBinModal from "../components/modals/ImprovedAddBinModal";
 
 export default function SmartBins() {
   // Existing SmartBin states
@@ -189,11 +190,23 @@ export default function SmartBins() {
 
   const handleSaveCompartment = async (compartmentData) => {
     try {
-      if (editingCompartment) {
-        await Compartment.update(editingCompartment.id, compartmentData);
-      } else {
-        await Compartment.create({ ...compartmentData, smartbin_id: selectedSmartBin.id });
-      }
+      console.log('Saving compartment:', compartmentData);
+      
+      // Add smartBinId to compartment data
+      const dataToSave = {
+        ...compartmentData,
+        smartBinId: selectedSmartBin?.id || compartmentData.smartBinId,
+        smartbin_id: selectedSmartBin?.id || compartmentData.smartbin_id,
+      };
+      
+      // Save to Firestore
+      const savedCompartment = await FirebaseService.saveCompartment(dataToSave);
+      console.log('Compartment saved successfully:', savedCompartment);
+      
+      // Show success message
+      alert(`Compartment "${dataToSave.label}" ${editingCompartment ? 'updated' : 'added'} successfully!\n\nSensors enabled: ${Object.keys(dataToSave.sensors_enabled || {}).filter(k => dataToSave.sensors_enabled[k]).join(', ')}`);
+      
+      // Reset form and reload data
       setShowCompartmentForm(false);
       setEditingCompartment(null);
       setSelectedSmartBin(null);
@@ -201,6 +214,7 @@ export default function SmartBins() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       console.error("Error saving compartment:", error);
+      alert(`Failed to save compartment: ${error.message}`);
     }
   };
 
@@ -236,10 +250,14 @@ export default function SmartBins() {
   const handleDeleteCompartment = async (compartmentId) => {
     if (window.confirm('Are you sure you want to delete this compartment?')) {
       try {
-        await Compartment.delete(compartmentId);
+        console.log('Deleting compartment:', compartmentId);
+        await FirebaseService.deleteCompartment(compartmentId);
+        console.log('Compartment deleted successfully');
+        alert('Compartment deleted successfully!');
         loadData();
       } catch (error) {
         console.error("Error deleting compartment:", error);
+        alert(`Failed to delete compartment: ${error.message}`);
       }
     }
   };
@@ -294,16 +312,19 @@ export default function SmartBins() {
       
       // Save to Firebase based on bin type
       let savedBin;
-      if (binData.type === 'smartbin') {
+      if (binData.type === 'smart' || binData.type === 'smartbin') {
         savedBin = await FirebaseService.saveSmartBin(binData);
+        console.log('Smart bin saved to smart-bins collection:', savedBin);
       } else {
         savedBin = await FirebaseService.saveSingleBin(binData);
+        console.log('Single bin saved to single-bins collection:', savedBin);
       }
       
       console.log('Bin saved successfully:', savedBin);
       
       // Show success message
-      alert(`${binData.type === 'smartbin' ? 'SmartBin' : 'SingleBin'} "${binData.name}" added successfully with IoT device "${binData.deviceId}"!\n\nBin ID: ${savedBin.firebaseId}`);
+      const binTypeName = (binData.type === 'smart' || binData.type === 'smartbin') ? 'Smart Bin' : 'Single Bin';
+      alert(`${binTypeName} "${binData.name}" added successfully with IoT device "${binData.deviceId}"!\n\nSensors enabled: ${Object.keys(binData.sensors_enabled || {}).filter(k => binData.sensors_enabled[k]).join(', ')}`);
       
       // Reload the data to show the new bin
       await loadData();
@@ -857,7 +878,7 @@ export default function SmartBins() {
       />
 
       {/* Add SmartBin Modal */}
-      <AddBinModal
+      <ImprovedAddBinModal
         isOpen={isAddSmartBinModalOpen}
         onClose={() => setIsAddSmartBinModalOpen(false)}
         onAddBin={handleAddBin}
@@ -865,7 +886,7 @@ export default function SmartBins() {
       />
 
       {/* Add SingleBin Modal */}
-      <AddBinModal
+      <ImprovedAddBinModal
         isOpen={isAddSingleBinModalOpen}
         onClose={() => setIsAddSingleBinModalOpen(false)}
         onAddBin={handleAddBin}

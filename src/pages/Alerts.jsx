@@ -1,9 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { Alert as AlertEntity } from "@/api/entities";
-import { Compartment } from "@/api/entities";
-import { SmartBin } from "@/api/entities";
-import { User } from "@/api/entities";
+import { FirebaseService } from "@/services/firebaseService";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,81 +14,95 @@ import {
   Search,
   Filter,
   Calendar,
-  Clock
+  Clock,
+  RefreshCw
 } from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function Alerts() {
   const [alerts, setAlerts] = useState([]);
-  const [compartments, setCompartments] = useState([]);
-  const [smartBins, setSmartBins] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const { toast } = useToast();
 
   useEffect(() => {
-    loadData();
+    loadAlerts();
+    // Auto-generate alerts every 5 minutes
+    const interval = setInterval(() => {
+      generateAlerts();
+    }, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  const loadData = async () => {
+  const loadAlerts = async () => {
     try {
-      const currentUser = await User.me();
-      
-      // Check if admin is impersonating another user
-      const impersonatedUserStr = localStorage.getItem('impersonatedUser');
-      const effectiveUser = impersonatedUserStr ? JSON.parse(impersonatedUserStr) : currentUser;
-      
-      const [alertData, compartmentData, smartBinData] = await Promise.all([
-        AlertEntity.list('-created_date'),
-        Compartment.list(),
-        SmartBin.filter({ created_by: effectiveUser.email })
-      ]);
-
+      setLoading(true);
+      const alertData = await FirebaseService.getAlerts();
       setAlerts(alertData);
-      setCompartments(compartmentData);
-      setSmartBins(smartBinData);
     } catch (error) {
       console.error("Error loading alerts:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load alerts",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  const generateAlerts = async () => {
+    try {
+      setGenerating(true);
+      const newAlerts = await FirebaseService.generateAlertsForBins();
+      if (newAlerts.length > 0) {
+        toast({
+          title: "New Alerts",
+          description: `Generated ${newAlerts.length} new alert(s)`,
+        });
+        await loadAlerts();
+      }
+    } catch (error) {
+      console.error("Error generating alerts:", error);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleAcknowledge = async (alertId) => {
     try {
-      await AlertEntity.update(alertId, { acknowledged: true });
-      loadData();
+      await FirebaseService.acknowledgeAlert(alertId);
+      toast({
+        title: "Success",
+        description: "Alert acknowledged",
+      });
+      await loadAlerts();
     } catch (error) {
       console.error("Error acknowledging alert:", error);
+      toast({
+        title: "Error",
+        description: "Failed to acknowledge alert",
+        variant: "destructive"
+      });
     }
   };
-
-  const handleResolve = async (alertId) => {
-    try {
-      await AlertEntity.update(alertId, { resolved: true });
-      loadData();
-    } catch (error) {
-      console.error("Error resolving alert:", error);
-    }
-  };
-
-  // Get compartment and smartbin info for each alert
-  const enrichedAlerts = alerts.map(alert => {
-    const compartment = compartments.find(c => c.id === alert.compartment_id);
-    const smartBin = compartment ? smartBins.find(sb => sb.id === compartment.smartbin_id) : null;
-    return { ...alert, compartment, smartBin };
-  }).filter(alert => alert.smartBin); // Only show alerts from user's bins
 
   // Filter alerts
-  const filteredAlerts = enrichedAlerts.filter(alert => {
-    const matchesFilter = filter === 'all' || alert.severity === filter ||
-                         (filter === 'unresolved' && !alert.resolved) ||
-                         (filter === 'resolved' && alert.resolved);
+  const filteredAlerts = alerts.filter(alert => {
+    const matchesFilter = 
+      filter === 'all' || 
+      alert.severity === filter ||
+      (filter === 'unacknowledged' && !alert.acknowledged) ||
+      (filter === 'acknowledged' && alert.acknowledged);
     
     const matchesSearch = !searchTerm || 
-      alert.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      alert.smartBin?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      alert.compartment?.label.toLowerCase().includes(searchTerm.toLowerCase());
+      alert.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      alert.binName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      alert.type?.toLowerCase().includes(searchTerm.toLowerCase());
 
     return matchesFilter && matchesSearch;
   });
@@ -99,7 +110,8 @@ export default function Alerts() {
   const getSeverityIcon = (severity) => {
     switch (severity) {
       case 'critical': return <AlertTriangle className="w-5 h-5 text-red-600" />;
-      case 'warning': return <Bell className="w-5 h-5 text-yellow-600" />;
+      case 'high': return <AlertTriangle className="w-5 h-5 text-orange-600" />;
+      case 'medium': return <Bell className="w-5 h-5 text-yellow-600" />;
       default: return <Bell className="w-5 h-5 text-blue-600" />;
     }
   };
@@ -107,7 +119,8 @@ export default function Alerts() {
   const getSeverityColor = (severity) => {
     switch (severity) {
       case 'critical': return 'bg-red-100 text-red-700 border-red-200';
-      case 'warning': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'high': return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
       default: return 'bg-blue-100 text-blue-700 border-blue-200';
     }
   };
@@ -131,10 +144,20 @@ export default function Alerts() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
+        className="mb-8 flex items-center justify-between"
       >
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Alert Management</h1>
-        <p className="text-gray-600">Monitor and manage system alerts and notifications</p>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Alert Management</h1>
+          <p className="text-gray-600">Monitor and manage system alerts and notifications</p>
+        </div>
+        <Button 
+          onClick={generateAlerts}
+          disabled={generating}
+          className="gap-2"
+        >
+          <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+          Check for Alerts
+        </Button>
       </motion.div>
 
       {/* Filters */}
@@ -159,11 +182,11 @@ export default function Alerts() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Alerts</SelectItem>
-                <SelectItem value="unresolved">Unresolved</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
+                <SelectItem value="unacknowledged">Unacknowledged</SelectItem>
+                <SelectItem value="acknowledged">Acknowledged</SelectItem>
                 <SelectItem value="critical">Critical</SelectItem>
-                <SelectItem value="warning">Warning</SelectItem>
-                <SelectItem value="info">Info</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -175,33 +198,33 @@ export default function Alerts() {
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-red-600">
-              {enrichedAlerts.filter(a => a.severity === 'critical' && !a.resolved).length}
+              {alerts.filter(a => a.severity === 'critical' && !a.acknowledged).length}
             </div>
             <div className="text-sm text-gray-600">Critical</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-yellow-600">
-              {enrichedAlerts.filter(a => a.severity === 'warning' && !a.resolved).length}
+            <div className="text-2xl font-bold text-orange-600">
+              {alerts.filter(a => a.severity === 'high' && !a.acknowledged).length}
             </div>
-            <div className="text-sm text-gray-600">Warnings</div>
+            <div className="text-sm text-gray-600">High</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-gray-600">
-              {enrichedAlerts.filter(a => !a.resolved).length}
+              {alerts.filter(a => !a.acknowledged).length}
             </div>
-            <div className="text-sm text-gray-600">Unresolved</div>
+            <div className="text-sm text-gray-600">Unacknowledged</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-green-600">
-              {enrichedAlerts.filter(a => a.resolved).length}
+              {alerts.filter(a => a.acknowledged).length}
             </div>
-            <div className="text-sm text-gray-600">Resolved</div>
+            <div className="text-sm text-gray-600">Acknowledged</div>
           </CardContent>
         </Card>
       </div>
@@ -219,7 +242,7 @@ export default function Alerts() {
             <p className="text-gray-500 text-center">
               {searchTerm || filter !== 'all' 
                 ? 'Try adjusting your search or filter criteria'
-                : 'All systems are running normally'
+                : 'All systems are running normally. Click "Check for Alerts" to scan for new issues.'
               }
             </p>
           </CardContent>
@@ -236,8 +259,8 @@ export default function Alerts() {
                 transition={{ delay: index * 0.05 }}
               >
                 <Card className={`transition-all duration-300 ${
-                  alert.severity === 'critical' && !alert.resolved ? 'ring-2 ring-red-200 animate-pulse' : ''
-                } ${alert.resolved ? 'opacity-75' : ''}`}>
+                  alert.severity === 'critical' && !alert.acknowledged ? 'ring-2 ring-red-200 animate-pulse' : ''
+                } ${alert.acknowledged ? 'opacity-75' : ''}`}>
                   <CardContent className="p-6">
                     <div className="flex items-start gap-4">
                       <div className="flex-shrink-0 mt-1">
@@ -250,65 +273,55 @@ export default function Alerts() {
                             {alert.severity}
                           </Badge>
                           <Badge variant="outline">
-                            {alert.alert_type.replace('_', ' ').toUpperCase()}
+                            {alert.type?.replace('_', ' ').toUpperCase()}
                           </Badge>
-                          {alert.resolved && (
-                            <Badge className="bg-green-100 text-green-700">
-                              Resolved
+                          {alert.binType && (
+                            <Badge variant="secondary">
+                              {alert.binType}
                             </Badge>
                           )}
-                          {alert.acknowledged && !alert.resolved && (
-                            <Badge variant="secondary">
+                          {alert.acknowledged && (
+                            <Badge className="bg-green-100 text-green-700">
                               Acknowledged
                             </Badge>
                           )}
                         </div>
 
                         <h3 className="font-semibold text-gray-900 mb-1">
-                          {alert.smartBin?.name} - {alert.compartment?.label}
+                          {alert.binName}
                         </h3>
                         
                         <p className="text-gray-700 mb-2">{alert.message}</p>
                         
-                        {alert.value && (
+                        {alert.currentValue !== null && alert.threshold !== null && (
                           <p className="text-sm text-gray-500 mb-2">
-                            Current Value: <span className="font-medium">{alert.value}</span> 
-                            {alert.threshold && (
-                              <> / Threshold: <span className="font-medium">{alert.threshold}</span></>
-                            )}
+                            Current: <span className="font-medium">{alert.currentValue}{alert.unit}</span>
+                            {' / '}
+                            Threshold: <span className="font-medium">{alert.threshold}{alert.unit}</span>
                           </p>
                         )}
 
                         <div className="flex items-center gap-4 text-sm text-gray-500">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            {format(new Date(alert.created_date), 'MMM dd, yyyy')}
+                            {format(new Date(alert.timestamp), 'MMM dd, yyyy')}
                           </div>
                           <div className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            {format(new Date(alert.created_date), 'HH:mm')}
+                            {format(new Date(alert.timestamp), 'HH:mm')}
                           </div>
                         </div>
                       </div>
 
-                      {!alert.resolved && (
+                      {!alert.acknowledged && (
                         <div className="flex gap-2">
-                          {!alert.acknowledged && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleAcknowledge(alert.id)}
-                            >
-                              Acknowledge
-                            </Button>
-                          )}
                           <Button
                             size="sm"
-                            onClick={() => handleResolve(alert.id)}
+                            onClick={() => handleAcknowledge(alert.id)}
                             className="bg-green-600 hover:bg-green-700"
                           >
                             <Check className="w-4 h-4 mr-1" />
-                            Resolve
+                            Acknowledge
                           </Button>
                         </div>
                       )}
@@ -323,3 +336,4 @@ export default function Alerts() {
     </div>
   );
 }
+
