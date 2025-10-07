@@ -6,13 +6,44 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 
 export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFillLevel, totalCompartments }) {
+  // Generate real-time status based on actual data
+  const getSmartBinStatus = () => {
+    if (activeSmartBins === 0) return { trend: "—", subtitle: "no bins active" };
+    return { trend: "●", subtitle: `${activeSmartBins} bin${activeSmartBins !== 1 ? 's' : ''} online` };
+  };
+
+  const getCriticalAlertsStatus = () => {
+    if (criticalAlerts === 0) return { trend: "✓", subtitle: "all clear" };
+    if (criticalAlerts === 1) return { trend: "!", subtitle: "needs attention" };
+    return { trend: "!!", subtitle: "urgent action required" };
+  };
+
+  const getFillLevelStatus = () => {
+    if (avgFillLevel === 0) return { trend: "—", subtitle: "no data" };
+    if (avgFillLevel < 30) return { trend: "↓", subtitle: "low usage" };
+    if (avgFillLevel < 70) return { trend: "→", subtitle: "moderate usage" };
+    if (avgFillLevel < 90) return { trend: "↑", subtitle: "high usage" };
+    return { trend: "⚠", subtitle: "near full" };
+  };
+
+  const getCompartmentStatus = () => {
+    if (totalCompartments === 0) return { trend: "—", subtitle: "no compartments" };
+    if (totalCompartments === 1) return { trend: "●", subtitle: "single compartment" };
+    return { trend: "●●", subtitle: `${totalCompartments} compartments` };
+  };
+
+  const smartBinStatus = getSmartBinStatus();
+  const alertStatus = getCriticalAlertsStatus();
+  const fillStatus = getFillLevelStatus();
+  const compartmentStatus = getCompartmentStatus();
+
   const stats = [
     {
       title: "Active SmartBins",
       value: activeSmartBins,
       icon: Trash2,
-      trend: "+12%",
-      subtitle: "from last month",
+      trend: smartBinStatus.trend,
+      subtitle: smartBinStatus.subtitle,
       color: {
         primary: "from-blue-500 to-cyan-400",
         liveColor: "#3b82f6",
@@ -24,12 +55,12 @@ export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFill
       title: "Critical Alerts",
       value: criticalAlerts,
       icon: AlertTriangle,
-      trend: criticalAlerts > 0 ? "-8%" : "0%",
-      subtitle: criticalAlerts > 0 ? "needs attention" : "all clear",
+      trend: alertStatus.trend,
+      subtitle: alertStatus.subtitle,
       color: {
-        primary: "from-red-500 to-pink-400",
-        liveColor: "#ef4444",
-        glow: "shadow-red-500/20"
+        primary: criticalAlerts > 0 ? "from-red-500 to-pink-400" : "from-green-500 to-emerald-400",
+        liveColor: criticalAlerts > 0 ? "#ef4444" : "#10b981",
+        glow: criticalAlerts > 0 ? "shadow-red-500/20" : "shadow-green-500/20"
       },
       clickable: true,
       link: createPageUrl("Alerts")
@@ -38,12 +69,18 @@ export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFill
       title: "Average Fill Level",
       value: `${avgFillLevel.toFixed(1)}%`,
       icon: BarChart3,
-      trend: "+3.2%",
-      subtitle: "efficiency up",
+      trend: fillStatus.trend,
+      subtitle: fillStatus.subtitle,
       color: {
-        primary: "from-green-500 to-emerald-400",
-        liveColor: "#10b981",
-        glow: "shadow-green-500/20"
+        primary: avgFillLevel >= 90 ? "from-red-500 to-pink-400" : 
+                avgFillLevel >= 70 ? "from-orange-500 to-yellow-400" : 
+                "from-green-500 to-emerald-400",
+        liveColor: avgFillLevel >= 90 ? "#ef4444" : 
+                  avgFillLevel >= 70 ? "#f59e0b" :
+                  "#10b981",
+        glow: avgFillLevel >= 90 ? "shadow-red-500/20" : 
+              avgFillLevel >= 70 ? "shadow-orange-500/20" :
+              "shadow-green-500/20"
       },
       clickable: false
     },
@@ -51,8 +88,8 @@ export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFill
       title: "Total Compartments",
       value: totalCompartments,
       icon: Activity,
-      trend: "+15%",
-      subtitle: "capacity added",
+      trend: compartmentStatus.trend,
+      subtitle: compartmentStatus.subtitle,
       color: {
         primary: "from-purple-500 to-indigo-400",
         liveColor: "#a855f7",
@@ -184,13 +221,29 @@ export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFill
                       
                       <div>
                         <motion.div
-                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${stat.color.primary} bg-clip-text text-transparent`}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium`}
                           initial={{ scale: 0, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           transition={{ delay: index * 0.1 + 0.3 }}
                         >
-                          <TrendingUp className="w-3 h-3 text-green-500" />
-                          <span className="text-green-600 dark:text-green-400 font-bold">{stat.trend}</span>
+                          {stat.trend === "✓" ? (
+                            <span className="text-green-600 dark:text-green-400 font-bold text-lg">✓</span>
+                          ) : stat.trend === "!" ? (
+                            <span className="text-orange-600 dark:text-orange-400 font-bold text-lg">!</span>
+                          ) : stat.trend === "!!" ? (
+                            <span className="text-red-600 dark:text-red-400 font-bold text-lg">!!</span>
+                          ) : stat.trend === "⚠" ? (
+                            <span className="text-red-600 dark:text-red-400 font-bold text-lg">⚠</span>
+                          ) : stat.trend === "—" ? (
+                            <span className="text-gray-500 dark:text-gray-400 font-bold">—</span>
+                          ) : (
+                            <span className={`font-bold text-lg ${
+                              stat.title === "Critical Alerts" && criticalAlerts === 0 ? "text-green-600 dark:text-green-400" :
+                              "text-blue-600 dark:text-blue-400"
+                            }`}>
+                              {stat.trend}
+                            </span>
+                          )}
                         </motion.div>
                       </div>
                     </div>

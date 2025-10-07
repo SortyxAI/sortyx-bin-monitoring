@@ -24,7 +24,6 @@ import StatsOverview from "../components/dashboard/StatsOverview";
 import BinDetailsModal from "../components/modals/BinDetailsModal";
 import SmartBinCard from "../components/dashboard/SmartBinCard";
 import RecentAlerts from "../components/dashboard/RecentAlerts";
-import QuickActions from "../components/dashboard/QuickActions";
 import SingleBinDashboardCard from "../components/dashboard/SingleBinDashboardCard";
 
 // Define a constant for max bins allowed on a free plan
@@ -568,14 +567,13 @@ export default function Dashboard() {
                               </motion.div>
                               <h3 className="text-xl font-semibold text-gray-900 dark:text-purple-100 mb-2">No SingleBins configured</h3>
                               <p className="text-gray-500 dark:text-purple-200 mb-6 text-center max-w-md">
-                                Get started by adding your first SingleBin.
+                                Navigate to the Smart Bins page to add your first SingleBin.
                               </p>
                               {isFreePlan && (
                                 <p className="text-sm text-yellow-600 dark:text-yellow-300 mt-2">
                                   You can add up to {MAX_FREE_BINS} SingleBins on your free plan.
                                 </p>
                               )}
-                              <QuickActions /> {/* This button likely adds single bins too */}
                             </CardContent>
                           </Card>
                         </motion.div>
@@ -713,7 +711,7 @@ export default function Dashboard() {
                               <p className="text-gray-500 dark:text-purple-200 mb-6 text-center max-w-md">
                                 {hasReachedSmartBinLimit 
                                   ? `You've reached the limit of ${MAX_FREE_BINS} SmartBins on your free plan. Upgrade to add more!`
-                                  : "Get started by adding your first SmartBin to begin monitoring your waste management system."
+                                  : "Navigate to the Smart Bins page to add your first SmartBin and begin monitoring your waste management system."
                                 }
                               </p>
                               {isFreePlan && !hasReachedSmartBinLimit && (
@@ -721,7 +719,6 @@ export default function Dashboard() {
                                   You can add up to {MAX_FREE_BINS} SmartBins on your free plan.
                                 </p>
                               )}
-                              {!hasReachedSmartBinLimit && <QuickActions />}
                               {hasReachedSmartBinLimit && (
                                 <Button className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-lg">
                                   Upgrade Plan
