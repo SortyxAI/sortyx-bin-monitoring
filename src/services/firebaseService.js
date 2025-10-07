@@ -369,8 +369,14 @@ export class FirebaseService {
       
       // Check each bin for alert conditions
       for (const bin of allBins) {
-        // Fill level alert
-        if (bin.current_fill >= (bin.fill_threshold || 80)) {
+        // Skip multi-compartment bins - only check their individual compartments
+        if (bin.type === 'smart' && bin.compartment_count > 0) {
+          console.log(`⏭️ Skipping multi-compartment bin "${bin.name}" - will check compartments separately`);
+          continue;
+        }
+        
+        // Fill level alert (only for single bins and smart bins without compartments)
+        if (bin.current_fill !== undefined && bin.current_fill !== null && bin.current_fill >= (bin.fill_threshold || 80)) {
           const alert = await this.saveAlert({
             binId: bin.id,
             binName: bin.name,
@@ -418,9 +424,13 @@ export class FirebaseService {
         }
       }
       
-      // Check compartments
+      // Check compartments for multi-compartment bins
       for (const compartment of compartments) {
-        if (compartment.current_fill >= (compartment.fill_threshold || 90)) {
+        // Only alert if compartment has actual sensor data (not just default 0)
+        if (compartment.current_fill !== undefined && 
+            compartment.current_fill !== null && 
+            compartment.current_fill > 0 && 
+            compartment.current_fill >= (compartment.fill_threshold || 90)) {
           const alert = await this.saveAlert({
             binId: compartment.smartBinId,
             compartmentId: compartment.id,
