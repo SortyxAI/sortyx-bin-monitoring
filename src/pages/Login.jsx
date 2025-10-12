@@ -7,12 +7,18 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Alert } from '../components/ui/alert';
 import { Trash2, LogIn, Mail, Lock } from 'lucide-react';
+import Logo from "../assets/Logo.jpeg";
+import DarkModeLogo from "../assets/Logo-darkmode.jpeg";
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState('admin@sortyx.com');
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return saved === 'dark';
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -74,14 +80,21 @@ export default function Login({ onLogin }) {
       >
         <Card className="bg-white/80 dark:bg-[#2A1F3D]/90 backdrop-blur-sm border-2 border-purple-200/50 dark:border-purple-600/30 shadow-2xl">
           <CardHeader className="text-center pb-6">
-            <motion.div
+            {/* <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
               className="w-20 h-20 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl"
             >
               <Trash2 className="w-10 h-10 text-white" />
-            </motion.div>
+            </motion.div> */}
+            <div className="flex items-center justify-center">
+                  {isDarkMode ?
+                    <img src={DarkModeLogo} alt="Logo" className="w-16 h-15 rounded-full" />
+                    :
+                    <img src={Logo} alt="Logo" className="w-16 h-15 rounded-full" />
+                  }
+            </div>
             <CardTitle className="text-3xl font-bold bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-800 dark:from-purple-300 dark:via-indigo-300 dark:to-purple-500 bg-clip-text text-transparent">
               Sortyx Smart Bin
             </CardTitle>

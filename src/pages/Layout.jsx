@@ -3,6 +3,9 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { User } from "@/api/entities";
+// import { Logo } from "@/assets/Logo.jpeg"
+import Logo from "@/assets/Logo.jpeg"
+import DarkModeLogo from "@/assets/Logo-darkmode.jpeg"
 import { 
   LayoutDashboard, 
   Settings, 
@@ -211,9 +214,16 @@ export default function Layout({ children, currentPageName }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 dark:from-purple-500 dark:to-indigo-500 rounded-xl flex items-center justify-center shadow-lg dark:shadow-purple-500/20">
+            <div className="flex items-center gap-2">
+              {/* <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 dark:from-purple-500 dark:to-indigo-500 rounded-xl flex items-center justify-center shadow-lg dark:shadow-purple-500/20">
                 <Trash2 className="w-6 h-6 text-white" />
+              </div> */}
+              <div className="flex-wrap w-10 h-10 items-center justify-center">
+                {isDarkMode ? (
+                  <img src={DarkModeLogo} alt="Sortyx Logo" className="block w-10 h-10 rounded-xl shadow-lg pb-0" />
+                ) : 
+                (<img src={Logo} alt="Sortyx Logo" className="block w-10 h-10 rounded-xl shadow-lg pb-0" />
+                )}
               </div>
               <div>
                 <h1 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 dark:from-purple-300 dark:to-indigo-300 bg-clip-text text-transparent">
@@ -272,9 +282,9 @@ export default function Layout({ children, currentPageName }) {
                     <span className="relative z-10">
                       <item.icon className={`w-4 h-4 ${location.pathname === item.url ? 'text-white' : 'text-purple-600 dark:text-purple-300'}`} />
                     </span>
-                    <span className="relative z-10">
+                    {/* <span className="relative z-10">
                       {item.title}
-                    </span>
+                    </span> */}
                   </Link>
                 </motion.div>
               ))}
@@ -328,7 +338,7 @@ export default function Layout({ children, currentPageName }) {
                           {(impersonatedUser?.full_name || user.full_name)?.[0] || (impersonatedUser?.email || user.email)[0].toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="hidden md:block text-sm font-medium text-gray-900 dark:text-purple-100">
+                      {/* <span className="hidden md:block text-sm font-medium text-gray-900 dark:text-purple-100">
                         {impersonatedUser ? (
                           <span className="flex items-center gap-1">
                             <Eye className="w-3 h-3 text-orange-500" />
@@ -337,7 +347,7 @@ export default function Layout({ children, currentPageName }) {
                         ) : (
                           user.full_name || user.email
                         )}
-                      </span>
+                      </span> */}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="dark:bg-[#2A1F3D] dark:border-purple-700">

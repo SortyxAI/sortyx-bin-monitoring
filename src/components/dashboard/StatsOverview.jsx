@@ -7,10 +7,21 @@ import { createPageUrl } from "@/utils";
 
 export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFillLevel, totalCompartments }) {
   // Generate real-time status based on actual data
+  // const getSmartBinStatus = () => {
+  //   if (activeSmartBins === 0) return { trend: "—", subtitle: "no bins active" };
+  //   return { trend: "●", subtitle: `${activeSmartBins} bin${activeSmartBins !== 1 ? 's' : ''} online` };
+  // };
+
   const getSmartBinStatus = () => {
-    if (activeSmartBins === 0) return { trend: "—", subtitle: "no bins active" };
-    return { trend: "●", subtitle: `${activeSmartBins} bin${activeSmartBins !== 1 ? 's' : ''} online` };
-  };
+    // console.log("Active SmartBinData : ",activeSmartBins);
+  if (!Number.isInteger(activeSmartBins)) {
+    console.warn('Warning: activeSmartBins is not an integer');
+    return { trend: "—", subtitle: "Invalid data" };
+  }
+  
+  if (activeSmartBins === 0) return { trend: "—", subtitle: "no bins active" };
+  return { trend: "●", subtitle: `${activeSmartBins} bin${activeSmartBins !== 1 ? 's' : ''} online` };
+};
 
   const getCriticalAlertsStatus = () => {
     if (criticalAlerts === 0) return { trend: "✓", subtitle: "all clear" };
@@ -37,7 +48,7 @@ export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFill
   const fillStatus = getFillLevelStatus();
   const compartmentStatus = getCompartmentStatus();
 
-  const stats = [
+  const status = [
     {
       title: "Active SmartBins",
       value: activeSmartBins,
@@ -101,7 +112,7 @@ export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFill
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
-      {stats.map((stat, index) => {
+      {status.map((stat, index) => {
         const CardWrapper = stat.clickable ? Link : 'div';
         const wrapperProps = stat.clickable ? { to: stat.link } : {};
 
