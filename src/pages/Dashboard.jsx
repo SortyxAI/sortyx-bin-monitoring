@@ -177,11 +177,11 @@ export default function Dashboard() {
 
     loadData();
 
-    const interval = setInterval(() => {
-      if (isMounted) {
-        loadData();
-      }
-    }, 30000);
+    // const interval = setInterval(() => {
+    //   if (isMounted) {
+    //     loadData();
+    //   }
+    // }, 30000);
 
     return () => {
       isMounted = false;
@@ -229,11 +229,17 @@ export default function Dashboard() {
     .filter(Boolean)
     .concat(smartBins.filter(bin => bin && bin.id && !smartBinOrder.includes(bin.id)));
 
-  const activeSmartBins = smartBins.filter(bin => bin.status === 'active');
+  const activeSmartBins = singleBins.filter(bin => bin.status === 'active');
   const criticalAlerts = alerts.filter(alert => alert.severity === 'critical');
-  const avgFillLevel = compartments.length > 0 
-    ? compartments.reduce((sum, comp) => sum + (comp.current_fill || 0), 0) / compartments.length 
-    : 0;
+  // const avgFillLevel = compartments.length > 0 
+  //   ? compartments.reduce((sum, comp) => sum + Number(comp.current_fill || 0), 0) / compartments.length 
+  //   : 0;
+  const avgFillLevel = compartments && compartments.length > 0
+  ? compartments.reduce((sum, comp) => sum + Number(comp.current_fill || 0), 0) / compartments.length
+  : 0;
+  compartments.forEach(c => console.log("compartments: ",c));
+  console.log("Average Fill Level:", compartments);
+
 
   // Check if the user is on a free plan and has reached the limit
   const isFreePlan = user?.plan === 'free';

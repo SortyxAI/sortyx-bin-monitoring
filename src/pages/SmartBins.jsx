@@ -362,7 +362,7 @@ export default function SmartBins() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Bin Management Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white max-[500px]:text-2xl">Bin Management Dashboard</h1>
         <p className="text-gray-600 dark:text-gray-300 mt-1">Configure and manage your smart waste bins and single waste units</p>
       </motion.div>
 
@@ -588,7 +588,7 @@ export default function SmartBins() {
             >
               <ChevronDown className="w-6 h-6 text-purple-600 dark:text-purple-400" />
             </motion.div>
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">SmartBins (Multi-Compartment)</h2>
+            <h2 className="text-2xl max-[447px]:text-[20px] font-semibold text-gray-900 dark:text-white">SmartBins (Multi-Compartment)</h2>
             <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-800/60 text-purple-700 dark:text-purple-200">
               {smartBins.length} bins
             </Badge>
@@ -598,7 +598,7 @@ export default function SmartBins() {
               e.stopPropagation();
               setIsAddSmartBinModalOpen(true);
             }}
-            className="bg-purple-600 hover:bg-purple-700"
+            className="bg-purple-600 hover:bg-purple-700  max-[400px]:px-2 max-[400px]:py-1"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add SmartBin
@@ -667,7 +667,7 @@ export default function SmartBins() {
                     <p className="text-gray-500 dark:text-gray-300 mb-4 text-center">
                       Create your first SmartBin to start monitoring your waste management system
                     </p>
-                    <Button
+                    {/* <Button
                       onClick={() => {
                         setEditingBin(null);
                         setShowBinForm(true);
@@ -678,7 +678,7 @@ export default function SmartBins() {
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Create SmartBin
-                    </Button>
+                    </Button> */}
                   </CardContent>
                 </Card>
               ) : (

@@ -147,13 +147,14 @@ export default function Alerts() {
         className="mb-8 flex items-center justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Alert Management</h1>
-          <p className="text-gray-600">Monitor and manage system alerts and notifications</p>
+      <h1 className="text-3xl max-[500px]:text-2xl font-bold mb-2 text-gray-900 dark:text-white ">Alert Management</h1>
+          <p className="text-gray-600 dark:text-gray-300">Monitor and manage system alerts and notifications</p>
         </div>
         <Button 
           onClick={generateAlerts}
           disabled={generating}
-          className="gap-2"
+          className="gap-2  text-white bg-gradient-to-r from-purple-600 to-indigo-600 
+          dark:from-pink-400 dark:to-fuchsia-500 dark:text-gray-100 "
         >
           <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
           Check for Alerts
@@ -166,12 +167,12 @@ export default function Alerts() {
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-900 dark:text-yellow-300"/>
                 <Input
                   placeholder="Search alerts..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 text-gray-900 placeholder:text-black dark:placeholder:text-[#fae505]"
                 />
               </div>
             </div>
