@@ -145,7 +145,7 @@ export default function SingleBinForm({ singleBin, onSave, onCancel }) {
                   onChange={(e) => handleChange('name', e.target.value)}
                   placeholder="e.g., Reception Waste Bin"
                   required
-                  className="dark:bg-[#1F1235] dark:border-purple-600 dark:text-white"
+                  className="dark:bg-[#6522d8] dark:border-purple-600 dark:text-white"
                 />
               </div>
               

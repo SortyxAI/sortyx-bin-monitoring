@@ -12,7 +12,8 @@ export default function ProfileDetails({ user, onUpdate }) {
   const [formData, setFormData] = useState({
     full_name: user.full_name || "",
     phone: user.phone || "",
-    profile_photo: user.profile_photo || ""
+    profile_photo: user.profile_photo || "",
+    applicationId: user.applicationId || ""
   });
   const [uploading, setUploading] = useState(false);
   
@@ -35,6 +36,7 @@ export default function ProfileDetails({ user, onUpdate }) {
     onUpdate(formData);
     setIsEditing(false);
   };
+  console.log("Users!!!!!!!!!!!!", user);
   
   const handleCancel = () => {
     setFormData({
@@ -86,6 +88,7 @@ export default function ProfileDetails({ user, onUpdate }) {
                 value={formData.phone}
                 onChange={(e) => setFormData(prev => ({...prev, phone: e.target.value}))}
                 placeholder="For SMS alerts"
+                className="placeholder:text-gray-950"
               />
             </div>
           </div>
@@ -94,6 +97,7 @@ export default function ProfileDetails({ user, onUpdate }) {
             <h2 className="text-2xl font-bold">{user.full_name}</h2>
             <p className="text-gray-500">{user.email}</p>
             <p className="text-gray-500">{user.phone || "No phone number set"}</p>
+            <p className="text-gray-500"> <span className="text-gray-900 dark:text-[#FFFF00]">App Id:</span> {user.applicationId || "Not assigned"}</p>
           </div>
         )}
       </CardContent>

@@ -9,6 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FirebaseService } from '@/services/firebaseService';
+import { onValue, ref } from 'firebase/database';
+import { database, auth } from '@/config/firebase';
+import { SmartBin, User } from '@/api/entities'
+
 
 const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) => {
   // Step 1: Basic Details
@@ -102,6 +106,31 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
       console.error('Error loading sensor data:', error);
     }
   };
+
+  useEffect(() => {
+         
+   async function fetchBins(){
+    try{
+      const user = User.me();
+      console.log("Current User: ", user);
+      if(user?.applicationId){
+        const binsData = await SmartBin.filter({
+          applicationId : (await user).applicationId,
+        });
+        console.log("Bins Data User ", binsData);
+        setAvailableDevices(binsData);
+      }
+      else{
+        console.warn("User doesn't have an ApplicationId ")
+      }
+    }catch(error){
+      console.error("Error fetching bins", error);
+    }
+   }
+
+   fetchBins();
+    
+  }, []);
 
   const calculateFillLevel = (distance, binHeight) => {
     if (!distance || !binHeight) return 0;
@@ -302,7 +331,7 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="e.g., Main Entrance Bin"
-                      className="w-full"
+                      className="w-full placeholder:text-gray-900 dark:placeholder:text-[#FFFF00]"
                     />
                   </div>
 
@@ -316,7 +345,7 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
                       value={formData.location}
                       onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                       placeholder="e.g., Building A - Floor 1"
-                      className="w-full"
+                      className="w-full placeholder:text-gray-900 dark:placeholder:text-[#FFFF00]"
                     />
                   </div>
 
@@ -330,7 +359,7 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
                       onValueChange={(value) => setFormData({ ...formData, deviceId: value })}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select IoT Device" />
+                        <SelectValue placeholder="Select IoT Device"  />
                       </SelectTrigger>
                       <SelectContent>
                         {availableDevices.map((device) => (
