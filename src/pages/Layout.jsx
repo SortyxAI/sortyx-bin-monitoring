@@ -220,9 +220,9 @@ export default function Layout({ children, currentPageName }) {
               </div> */}
               <div className="flex-wrap w-10 h-10 items-center justify-center">
                 {isDarkMode ? (
-                  <img src={DarkModeLogo} alt="Sortyx Logo" className="block w-10 h-10 rounded-xl shadow-lg pb-0" />
+                  <img src={DarkModeLogo} alt="Sortyx Logo" className="block w-10 h-10 rounded-full shadow-lg pb-0" />
                 ) : 
-                (<img src={Logo} alt="Sortyx Logo" className="block w-10 h-10 rounded-xl shadow-lg pb-0" />
+                (<img src={Logo} alt="Sortyx Logo" className="block w-10 h-10 rounded-full shadow-lg pb-0" />
                 )}
               </div>
               <div>

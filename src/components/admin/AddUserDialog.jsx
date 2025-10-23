@@ -21,6 +21,7 @@ export default function AddUserDialog({ open, onOpenChange, onSave }) {
     role: "user",
     subscription_plan: "basic",
     phone: "",
+    applicationId :"",
     status: "active",
     subscription_expiry: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
     profile_photo: "",
@@ -71,6 +72,7 @@ export default function AddUserDialog({ open, onOpenChange, onSave }) {
     return true;
   };
 
+
   const handleSave = async () => {
     if (!validateForm()) return;
     
@@ -83,6 +85,7 @@ export default function AddUserDialog({ open, onOpenChange, onSave }) {
         full_name: formData.full_name,
         email: formData.email,
         phone: formData.phone,
+        applicationId: formData.applicationId,
         profile_photo: formData.profile_photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.full_name)}&background=7c3aed&color=fff`,
         subscription_plan: formData.subscription_plan,
         subscription_expiry: formData.subscription_expiry,
@@ -94,7 +97,7 @@ export default function AddUserDialog({ open, onOpenChange, onSave }) {
       userData.role = canEditRoles ? formData.role : 'user';
 
       await onSave(userData);
-      
+   
       // Reset form on success
       setFormData({
         full_name: "",
@@ -215,6 +218,19 @@ export default function AddUserDialog({ open, onOpenChange, onSave }) {
                   className="dark:bg-[#1F1235] dark:border-purple-600 dark:text-white"
                 />
               </div>
+
+                {/* Application Id */}
+              <div className="space-y-2">
+                <Label htmlFor="applicationId" className="dark:text-gray-200">Application ID</Label>
+                <span className="text-red-500">*</span>
+                <Input
+                   id="applicationId"
+                   value={formData.applicationId}
+                   onChange={(e) => handleChange('applicationId', e.target.value)}
+                   placeholder="Your Sensor Application ID Eg..: smart-bin123"
+                   className="dark:bg-[#1F1235] dark:border-purple-600 dark:text-white"
+                />
+              </div>
               
               <div className="space-y-2">
                 <Label htmlFor="profile_photo" className="dark:text-gray-200">Profile Photo URL</Label>
@@ -254,7 +270,7 @@ export default function AddUserDialog({ open, onOpenChange, onSave }) {
                     <SelectItem value="admin" className="dark:text-gray-200">Admin</SelectItem>
                   </SelectContent>
                 </Select>
-                {!canEditRoles && (
+                {!canEditRoles && ( 
                   <p className="text-xs text-gray-500 dark:text-gray-400">Will be set to 'User' - premium required for admin</p>
                 )}
               </div>

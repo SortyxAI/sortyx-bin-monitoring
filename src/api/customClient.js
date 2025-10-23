@@ -10,6 +10,7 @@ class FirebaseAPIClient {
       email: 'admin@sortyx.com',
       full_name: 'Admin User',
       plan: 'premium',
+      applicationId:"sortyx-iot",
       smartbin_order: []
     };
   }
