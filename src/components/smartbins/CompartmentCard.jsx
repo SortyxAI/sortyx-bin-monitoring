@@ -42,6 +42,9 @@ export default function CompartmentCard({ compartment, onEdit, onDelete }) {
     hazardous: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
   };
 
+  // Get bin type from either bin_type or compartment_type field
+  const binType = compartment.bin_type || compartment.compartment_type || 'general_waste';
+
   const copyUniqueId = async () => {
     if (compartment.unique_id) {
       await navigator.clipboard.writeText(compartment.unique_id);
@@ -57,8 +60,8 @@ export default function CompartmentCard({ compartment, onEdit, onDelete }) {
           <div className="flex-1">
             <CardTitle className="text-lg dark:text-white">{compartment.label}</CardTitle>
             <div className="flex items-center gap-2 mt-2">
-              <Badge className={binTypeColors[compartment.bin_type] || 'bg-gray-100 text-gray-700'}>
-                {compartment.bin_type.replace('_', ' ')}
+              <Badge className={binTypeColors[binType] || 'bg-gray-100 text-gray-700'}>
+                {binType.replace(/_/g, ' ')}
               </Badge>
               {compartment.unique_id && (
                 <div className="flex items-center gap-1">

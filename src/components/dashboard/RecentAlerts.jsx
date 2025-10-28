@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, Clock, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { format } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 
 export default function RecentAlerts({ alerts }) {
   const sortedAlerts = (alerts || []).slice(0, 5);
@@ -26,6 +26,30 @@ export default function RecentAlerts({ alerts }) {
       case 'high': return <AlertTriangle className="w-4 h-4 text-orange-600" />;
       case 'medium': return <Clock className="w-4 h-4 text-yellow-600" />;
       default: return <CheckCircle className="w-4 h-4 text-blue-600" />;
+    }
+  };
+
+  const formatAlertTime = (alert) => {
+    try {
+      // Try timestamp first, then created_at, then receivedAt
+      const timeValue = alert.timestamp || alert.created_at || alert.receivedAt;
+      
+      if (!timeValue) {
+        return 'N/A';
+      }
+
+      // Parse the date
+      const date = typeof timeValue === 'string' ? parseISO(timeValue) : new Date(timeValue);
+      
+      // Validate the date
+      if (!isValid(date)) {
+        return 'N/A';
+      }
+
+      return format(date, 'HH:mm');
+    } catch (error) {
+      console.error('Error formatting alert time:', error, alert);
+      return 'N/A';
     }
   };
 
@@ -70,7 +94,7 @@ export default function RecentAlerts({ alerts }) {
                       {alert.severity}
                     </Badge>
                     <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {format(new Date(alert.timestamp), 'HH:mm')}
+                      {formatAlertTime(alert)}
                     </span>
                   </div>
                   <p className="text-sm text-gray-900 dark:text-white font-medium">

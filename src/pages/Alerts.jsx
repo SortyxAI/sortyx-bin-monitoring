@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { FirebaseService } from "@/services/firebaseService";
 import { motion, AnimatePresence } from "framer-motion";
@@ -132,7 +131,7 @@ export default function Alerts() {
           <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <Bell className="w-8 h-8 text-white animate-pulse" />
           </div>
-          <p className="text-gray-600">Loading alerts...</p>
+          <p className="text-gray-600 dark:text-purple-200">Loading alerts...</p>
         </div>
       </div>
     );
@@ -162,7 +161,7 @@ export default function Alerts() {
       </motion.div>
 
       {/* Filters */}
-      <Card className="mb-6">
+      <Card className="mb-6 bg-gradient-to-br from-white to-purple-50/30 dark:from-[#2A1F3D] dark:to-[#1F0F2E] border-2 border-purple-200 dark:border-purple-700">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
@@ -196,51 +195,51 @@ export default function Alerts() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-        <Card>
+        <Card className="bg-gradient-to-br from-white to-red-50/30 dark:from-[#2A1F3D] dark:to-[#1F0F2E] border-2 border-red-200 dark:border-red-700">
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-red-600">
+            <div className="text-2xl font-bold text-red-600 dark:text-red-400">
               {alerts.filter(a => a.severity === 'critical' && !a.acknowledged).length}
             </div>
-            <div className="text-sm text-gray-600">Critical</div>
+            <div className="text-sm text-gray-600 dark:text-purple-200">Critical</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-gradient-to-br from-white to-orange-50/30 dark:from-[#2A1F3D] dark:to-[#1F0F2E] border-2 border-orange-200 dark:border-orange-700">
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-orange-600">
+            <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
               {alerts.filter(a => a.severity === 'high' && !a.acknowledged).length}
             </div>
-            <div className="text-sm text-gray-600">High</div>
+            <div className="text-sm text-gray-600 dark:text-purple-200">High</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-gradient-to-br from-white to-purple-50/30 dark:from-[#2A1F3D] dark:to-[#1F0F2E] border-2 border-purple-200 dark:border-purple-700">
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-gray-600">
+            <div className="text-2xl font-bold text-gray-600 dark:text-purple-300">
               {alerts.filter(a => !a.acknowledged).length}
             </div>
-            <div className="text-sm text-gray-600">Unacknowledged</div>
+            <div className="text-sm text-gray-600 dark:text-purple-200">Unacknowledged</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-gradient-to-br from-white to-green-50/30 dark:from-[#2A1F3D] dark:to-[#1F0F2E] border-2 border-green-200 dark:border-green-700">
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
               {alerts.filter(a => a.acknowledged).length}
             </div>
-            <div className="text-sm text-gray-600">Acknowledged</div>
+            <div className="text-sm text-gray-600 dark:text-purple-200">Acknowledged</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Alerts List */}
       {filteredAlerts.length === 0 ? (
-        <Card>
+        <Card className="bg-gradient-to-br from-white to-purple-50/30 dark:from-[#2A1F3D] dark:to-[#1F0F2E] border-2 border-purple-200 dark:border-purple-700">
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <Check className="w-8 h-8 text-green-600" />
+            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
+              <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-purple-100 mb-2">
               {searchTerm || filter !== 'all' ? 'No matching alerts' : 'No alerts found'}
             </h3>
-            <p className="text-gray-500 text-center">
+            <p className="text-gray-500 dark:text-purple-200 text-center">
               {searchTerm || filter !== 'all' 
                 ? 'Try adjusting your search or filter criteria'
                 : 'All systems are running normally. Click "Check for Alerts" to scan for new issues.'
@@ -259,8 +258,8 @@ export default function Alerts() {
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ delay: index * 0.05 }}
               >
-                <Card className={`transition-all duration-300 ${
-                  alert.severity === 'critical' && !alert.acknowledged ? 'ring-2 ring-red-200 animate-pulse' : ''
+                <Card className={`transition-all duration-300 bg-gradient-to-br from-white to-purple-50/30 dark:from-[#2A1F3D] dark:to-[#1F0F2E] border-2 border-purple-200 dark:border-purple-700 ${
+                  alert.severity === 'critical' && !alert.acknowledged ? 'ring-2 ring-red-200 dark:ring-red-700 animate-pulse' : ''
                 } ${alert.acknowledged ? 'opacity-75' : ''}`}>
                   <CardContent className="p-6">
                     <div className="flex items-start gap-4">
@@ -288,21 +287,21 @@ export default function Alerts() {
                           )}
                         </div>
 
-                        <h3 className="font-semibold text-gray-900 mb-1">
+                        <h3 className="font-semibold text-gray-900 dark:text-purple-100 mb-1">
                           {alert.binName}
                         </h3>
                         
-                        <p className="text-gray-700 mb-2">{alert.message}</p>
+                        <p className="text-gray-700 dark:text-purple-200 mb-2">{alert.message}</p>
                         
                         {alert.currentValue !== null && alert.threshold !== null && (
-                          <p className="text-sm text-gray-500 mb-2">
+                          <p className="text-sm text-gray-500 dark:text-purple-300 mb-2">
                             Current: <span className="font-medium">{alert.currentValue}{alert.unit}</span>
                             {' / '}
                             Threshold: <span className="font-medium">{alert.threshold}{alert.unit}</span>
                           </p>
                         )}
 
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-purple-300">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
                             {format(new Date(alert.timestamp), 'MMM dd, yyyy')}

@@ -12,6 +12,9 @@ import { FirebaseService } from "@/services/firebaseService";
 
 export default function SingleBinForm({ singleBin, onSave, onCancel }) {
   const [formData, setFormData] = useState({
+    // Preserve the ID when editing
+    id: singleBin?.id || null,
+    
     // Layer 1: Bin Level (Parent)
     name: singleBin?.name || "",
     location: singleBin?.location || "",

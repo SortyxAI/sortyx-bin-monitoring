@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FirebaseService } from '@/services/firebaseService';
 
-const CompartmentManagementModal = ({ isOpen, onClose, smartBin, onSave }) => {
+const CompartmentManagementModal = ({ isOpen, onClose, smartBin, onSave, initialCompartment = null }) => {
   const [mode, setMode] = useState('list'); // 'list', 'add', 'edit'
   const [editingCompartment, setEditingCompartment] = useState(null);
   const [availableDevices, setAvailableDevices] = useState([]);
@@ -39,8 +39,15 @@ const CompartmentManagementModal = ({ isOpen, onClose, smartBin, onSave }) => {
     if (isOpen && smartBin) {
       loadAvailableDevices();
       loadCompartments();
+      
+      // If an initial compartment is provided, switch to edit mode
+      if (initialCompartment) {
+        handleEditCompartment(initialCompartment);
+      } else {
+        setMode('list');
+      }
     }
-  }, [isOpen, smartBin]);
+  }, [isOpen, smartBin, initialCompartment]);
 
   const loadAvailableDevices = async () => {
     try {

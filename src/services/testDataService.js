@@ -3,9 +3,16 @@ import { FirebaseService } from './firebaseService';
 /**
  * Test Data Service
  * Generates realistic test data for SmartBins, SingleBins, Compartments, and Alerts
+ * Enhanced with Demo Mode featuring timed data cycles
  */
 export class TestDataService {
   static isTestDataEnabled = false;
+  static isTestMode = false;
+  static testDataInterval = null;
+  static testBins = [];
+  static demoPhase = 0; // 0: Empty/Low, 1: Mid-Level, 2: High/Alert, 3: Critical
+  static demoPhaseTimer = null;
+  static PHASE_DURATION = 8000; // 8 seconds per phase for demonstration
 
   // Waste types with realistic properties
   static wasteTypes = [
@@ -445,6 +452,35 @@ export class TestDataService {
   }
 
   /**
+   * Clear test data from localStorage
+   */
+  static clearTestData() {
+    console.log('🗑️ Clearing test data from localStorage...');
+    
+    localStorage.removeItem('testMode');
+    localStorage.removeItem('demoMode');
+    localStorage.removeItem('testBins');
+    localStorage.removeItem('testAlerts');
+    localStorage.removeItem('demoPhase');
+    
+    this.isTestMode = false;
+    this.testBins = [];
+    this.demoPhase = 0;
+    
+    if (this.demoPhaseTimer) {
+      clearInterval(this.demoPhaseTimer);
+      this.demoPhaseTimer = null;
+    }
+    
+    if (this.testDataInterval) {
+      clearInterval(this.testDataInterval);
+      this.testDataInterval = null;
+    }
+    
+    console.log('✅ Test data cleared from localStorage');
+  }
+
+  /**
    * Generate and save test data in one operation
    */
   static async generateAndSaveTestData(options = {}) {
@@ -464,144 +500,181 @@ export class TestDataService {
     }
   }
 
-  static isTestMode = false;
-  static testDataInterval = null;
-  static testBins = [];
+  /**
+   * Demo Mode: Generate bins with specific fill levels based on current phase
+   */
+  static generateDemoPhaseBins(phase, count = 3) {
+    const phases = [
+      { name: 'Empty/Low Level', fillRange: [0, 25], status: 'active' },
+      { name: 'Mid Level', fillRange: [40, 65], status: 'active' },
+      { name: 'High Level', fillRange: [70, 85], status: 'warning' },
+      { name: 'Critical/Alert', fillRange: [86, 100], status: 'critical' }
+    ];
 
-  // Toggle test mode on/off
-  static toggleTestMode() {
-    this.isTestMode = !this.isTestMode;
-    
-    if (this.isTestMode) {
-      console.log('🧪 Test mode ENABLED - Generating test data...');
-      this.startTestDataGeneration();
-    } else {
-      console.log('🧪 Test mode DISABLED - Stopping test data...');
-      this.stopTestDataGeneration();
-    }
-    
-    return this.isTestMode;
-  }
-
-  // Generate realistic test SmartBins
-  static generateTestSmartBins(count = 3) {
-    const locations = ['Main Building', 'North Wing', 'South Wing', 'East Campus', 'West Campus'];
+    const currentPhase = phases[phase % phases.length];
+    const locations = ['Main Building - Floor 1', 'North Wing - Floor 2', 'South Wing - Lobby', 'East Campus - Cafeteria', 'West Campus - Lab'];
     const wasteTypes = [
-      { name: 'General Waste', color: '#6B7280' },
-      { name: 'Recyclables', color: '#10B981' },
-      { name: 'Organic Waste', color: '#F59E0B' },
-      { name: 'Hazardous', color: '#EF4444' }
+      { name: 'General Waste', color: '#6B7280', icon: '🗑️' },
+      { name: 'Recyclables', color: '#10B981', icon: '♻️' },
+      { name: 'Organic Waste', color: '#F59E0B', icon: '🌱' },
+      { name: 'Paper', color: '#3B82F6', icon: '📄' }
     ];
 
     const bins = [];
+    
+    // Generate SmartBins
     for (let i = 0; i < count; i++) {
-      const binId = `test-smartbin-${i + 1}`;
-      const compartmentCount = Math.floor(Math.random() * 2) + 2; // 2-3 compartments
+      const binId = `demo-smartbin-${i + 1}`;
+      const compartmentCount = 2 + (i % 2); // 2-3 compartments
       
       const smartBin = {
         id: binId,
-        name: `Test SmartBin ${i + 1}`,
+        name: `Demo SmartBin ${i + 1}`,
         location: locations[i % locations.length],
-        status: 'active',
+        status: currentPhase.status,
         latitude: 40.7128 + (Math.random() - 0.5) * 0.1,
         longitude: -74.0060 + (Math.random() - 0.5) * 0.1,
-        installation_date: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString(),
-        last_maintenance: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+        installation_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        last_maintenance: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+        last_emptied: phase === 0 ? new Date().toISOString() : new Date(Date.now() - phase * 2 * 60 * 60 * 1000).toISOString(),
         isTestData: true,
+        demoPhase: currentPhase.name,
         compartments: []
       };
 
-      // Generate compartments for this SmartBin
+      // Generate compartments with phase-appropriate fill levels
       for (let j = 0; j < compartmentCount; j++) {
         const wasteType = wasteTypes[j % wasteTypes.length];
-        const fillLevel = Math.floor(Math.random() * 100);
+        const [minFill, maxFill] = currentPhase.fillRange;
+        const fillLevel = Math.floor(Math.random() * (maxFill - minFill + 1)) + minFill;
+        const temperature = 20 + Math.random() * 8; // 20-28°C
+        const humidity = 40 + Math.random() * 30; // 40-70%
         
         smartBin.compartments.push({
           id: `${binId}-comp-${j + 1}`,
           smartbin_id: binId,
+          label: `${wasteType.name} - Comp ${j + 1}`,
           waste_type: wasteType.name,
           current_fill: fillLevel,
           capacity: 100,
-          threshold: 85,
-          status: fillLevel >= 85 ? 'critical' : fillLevel >= 70 ? 'warning' : 'normal',
-          sensor_id: `sensor-${binId}-${j + 1}`,
+          threshold: 80,
+          status: fillLevel >= 85 ? 'critical' : fillLevel >= 70 ? 'warning' : 'active',
+          sensor_id: `demo-sensor-${binId}-${j + 1}`,
           last_updated: new Date().toISOString(),
-          color: wasteType.color
+          color: wasteType.color,
+          icon: wasteType.icon,
+          temperature: parseFloat(temperature.toFixed(1)),
+          humidity: parseFloat(humidity.toFixed(1)),
+          battery_level: 100 - (phase * 10) + Math.floor(Math.random() * 10), // Gradual battery drain
+          distance: parseFloat(((100 - fillLevel) * 0.3).toFixed(2)) // Simulate ultrasonic sensor
         });
       }
 
       bins.push(smartBin);
     }
 
-    return bins;
-  }
-
-  // Generate realistic test SingleBins
-  static generateTestSingleBins(count = 2) {
-    const locations = ['Entrance Hall', 'Cafeteria', 'Library', 'Parking Lot', 'Reception'];
-    const wasteTypes = ['General Waste', 'Recyclables', 'Organic Waste', 'Paper Only'];
-
-    const bins = [];
-    for (let i = 0; i < count; i++) {
-      const fillLevel = Math.floor(Math.random() * 100);
+    // Generate SingleBins
+    const singleBinCount = 2;
+    for (let i = 0; i < singleBinCount; i++) {
+      const [minFill, maxFill] = currentPhase.fillRange;
+      const fillLevel = Math.floor(Math.random() * (maxFill - minFill + 1)) + minFill;
+      const wasteType = wasteTypes[i % wasteTypes.length];
       
       bins.push({
-        id: `test-singlebin-${i + 1}`,
-        name: `Test SingleBin ${i + 1}`,
-        location: locations[i % locations.length],
-        waste_type: wasteTypes[i % wasteTypes.length],
+        id: `demo-singlebin-${i + 1}`,
+        name: `Demo SingleBin ${i + 1}`,
+        location: locations[(i + count) % locations.length],
+        waste_type: wasteType.name,
         current_fill: fillLevel,
+        fill_level: fillLevel,
         capacity: 100,
         threshold: 80,
         status: fillLevel >= 80 ? 'critical' : fillLevel >= 65 ? 'warning' : 'active',
         latitude: 40.7128 + (Math.random() - 0.5) * 0.1,
         longitude: -74.0060 + (Math.random() - 0.5) * 0.1,
-        sensor_id: `single-sensor-${i + 1}`,
+        sensor_id: `demo-single-sensor-${i + 1}`,
         last_updated: new Date().toISOString(),
-        installation_date: new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000).toISOString(),
-        isTestData: true
+        last_emptied: phase === 0 ? new Date().toISOString() : new Date(Date.now() - phase * 2 * 60 * 60 * 1000).toISOString(),
+        installation_date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
+        color: wasteType.color,
+        icon: wasteType.icon,
+        temperature: parseFloat((20 + Math.random() * 8).toFixed(1)),
+        humidity: parseFloat((40 + Math.random() * 30).toFixed(1)),
+        battery_level: 100 - (phase * 8) + Math.floor(Math.random() * 8),
+        distance: parseFloat(((100 - fillLevel) * 0.3).toFixed(2)),
+        isTestData: true,
+        demoPhase: currentPhase.name
       });
     }
 
     return bins;
   }
 
-  // Generate realistic alerts
-  static generateTestAlerts(bins) {
+  /**
+   * Demo Mode: Generate alerts based on current phase
+   */
+  static generateDemoPhaseAlerts(bins, phase) {
     const alerts = [];
-    const alertTypes = ['high_fill', 'maintenance_required', 'sensor_error', 'temperature_alert'];
-    const severities = ['critical', 'warning', 'info'];
+    const alertTemplates = [
+      [], // Phase 0: No alerts (empty bins)
+      [ // Phase 1: Info alerts
+        { type: 'fill_update', severity: 'info', message: 'Fill level update' }
+      ],
+      [ // Phase 2: Warning alerts
+        { type: 'fill_warning', severity: 'warning', message: 'Fill level above threshold' },
+        { type: 'maintenance_due', severity: 'warning', message: 'Maintenance recommended' }
+      ],
+      [ // Phase 3: Critical alerts
+        { type: 'bin_full', severity: 'critical', message: 'Bin is full - immediate action required' },
+        { type: 'overflow_risk', severity: 'critical', message: 'Overflow risk detected' },
+        { type: 'high_fill', severity: 'critical', message: 'Critical fill level reached' }
+      ]
+    ];
 
+    const phaseAlerts = alertTemplates[phase % alertTemplates.length];
+    
     bins.forEach(bin => {
+      if (phaseAlerts.length === 0) return;
+
       if (bin.compartments) {
         // SmartBin alerts
         bin.compartments.forEach(comp => {
-          if (comp.current_fill >= 85 || Math.random() > 0.7) {
+          if (comp.current_fill >= 70 || phase >= 2) {
+            const template = phaseAlerts[Math.floor(Math.random() * phaseAlerts.length)];
             alerts.push({
-              id: `alert-${comp.id}-${Date.now()}`,
+              id: `demo-alert-${comp.id}-${Date.now()}-${Math.random()}`,
               compartment_id: comp.id,
               smartbin_id: bin.id,
-              type: alertTypes[Math.floor(Math.random() * alertTypes.length)],
-              severity: comp.current_fill >= 85 ? 'critical' : severities[Math.floor(Math.random() * severities.length)],
-              message: `${comp.waste_type} compartment at ${comp.current_fill}% capacity`,
-              timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
+              bin_name: bin.name,
+              type: template.type,
+              severity: template.severity,
+              message: `${comp.waste_type}: ${template.message} (${comp.current_fill}%)`,
+              recommended_action: phase >= 3 ? 'Empty immediately' : phase >= 2 ? 'Schedule collection' : 'Monitor',
+              timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+              created_at: new Date(Date.now() - Math.random() * 3600000).toISOString(),
               resolved: false,
-              isTestData: true
+              isTestData: true,
+              demoPhase: phase
             });
           }
         });
       } else {
         // SingleBin alerts
-        if (bin.current_fill >= 80 || Math.random() > 0.7) {
+        if (bin.current_fill >= 65 || phase >= 2) {
+          const template = phaseAlerts[Math.floor(Math.random() * phaseAlerts.length)];
           alerts.push({
-            id: `alert-${bin.id}-${Date.now()}`,
+            id: `demo-alert-${bin.id}-${Date.now()}-${Math.random()}`,
             bin_id: bin.id,
-            type: alertTypes[Math.floor(Math.random() * alertTypes.length)],
-            severity: bin.current_fill >= 80 ? 'critical' : severities[Math.floor(Math.random() * severities.length)],
-            message: `${bin.waste_type} bin at ${bin.current_fill}% capacity`,
-            timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(),
+            bin_name: bin.name,
+            type: template.type,
+            severity: template.severity,
+            message: `${bin.waste_type}: ${template.message} (${bin.current_fill}%)`,
+            recommended_action: phase >= 3 ? 'Empty immediately' : phase >= 2 ? 'Schedule collection' : 'Monitor',
+            timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+            created_at: new Date(Date.now() - Math.random() * 3600000).toISOString(),
             resolved: false,
-            isTestData: true
+            isTestData: true,
+            demoPhase: phase
           });
         }
       }
@@ -610,97 +683,172 @@ export class TestDataService {
     return alerts;
   }
 
-  // Simulate realistic fill level changes over time
-  static updateFillLevels(bins) {
-    return bins.map(bin => {
+  /**
+   * Start Demo Mode with timed phase progression
+   */
+  static startDemoMode() {
+    console.log('🎬 Starting Demo Mode with timed phase cycles...');
+    
+    this.isTestMode = true;
+    this.demoPhase = 0;
+    
+    // Generate initial phase data
+    this.updateDemoPhase();
+    
+    // Set up phase progression timer
+    this.demoPhaseTimer = setInterval(() => {
+      this.demoPhase = (this.demoPhase + 1) % 4; // Cycle through 4 phases
+      this.updateDemoPhase();
+      
+      const phaseNames = ['Empty/Low Level', 'Mid Level', 'High Level', 'Critical/Alert'];
+      console.log(`🎬 Demo Phase ${this.demoPhase + 1}/4: ${phaseNames[this.demoPhase]}`);
+    }, this.PHASE_DURATION);
+    
+    // Set up real-time updates within each phase (every 2 seconds)
+    this.testDataInterval = setInterval(() => {
+      this.updateDemoPhaseWithVariation();
+    }, 2000);
+    
+    localStorage.setItem('testMode', 'true');
+    localStorage.setItem('demoMode', 'true');
+    localStorage.setItem('demoPhase', this.demoPhase.toString());
+  }
+
+  /**
+   * Update demo phase data
+   */
+  static updateDemoPhase() {
+    this.testBins = this.generateDemoPhaseBins(this.demoPhase, 3);
+    const alerts = this.generateDemoPhaseAlerts(this.testBins, this.demoPhase);
+    
+    localStorage.setItem('testBins', JSON.stringify(this.testBins));
+    localStorage.setItem('testAlerts', JSON.stringify(alerts));
+    localStorage.setItem('demoPhase', this.demoPhase.toString());
+    
+    // Notify components of data update
+    window.dispatchEvent(new CustomEvent('testDataUpdated', {
+      detail: {
+        phase: this.demoPhase,
+        phaseNames: ['Empty/Low', 'Mid Level', 'High Level', 'Critical'],
+        phaseName: ['Empty/Low', 'Mid Level', 'High Level', 'Critical'][this.demoPhase]
+      }
+    }));
+  }
+
+  /**
+   * Add slight variations to current phase data for realism
+   */
+  static updateDemoPhaseWithVariation() {
+    if (!this.testBins || this.testBins.length === 0) return;
+    
+    this.testBins = this.testBins.map(bin => {
       if (bin.compartments) {
-        // SmartBin - update each compartment
         return {
           ...bin,
-          compartments: bin.compartments.map(comp => {
-            // Simulate gradual fill increase (0-3% per update)
-            const change = Math.random() * 3;
-            let newFill = Math.min(100, comp.current_fill + change);
-            
-            // Occasionally simulate emptying when above 90%
-            if (comp.current_fill > 90 && Math.random() > 0.7) {
-              newFill = Math.floor(Math.random() * 20); // Empty to 0-20%
-            }
-
-            return {
-              ...comp,
-              current_fill: Math.round(newFill),
-              status: newFill >= 85 ? 'critical' : newFill >= 70 ? 'warning' : 'normal',
-              last_updated: new Date().toISOString()
-            };
-          })
+          compartments: bin.compartments.map(comp => ({
+            ...comp,
+            current_fill: Math.max(0, Math.min(100, comp.current_fill + (Math.random() - 0.3) * 2)),
+            temperature: parseFloat((comp.temperature + (Math.random() - 0.5) * 0.5).toFixed(1)),
+            humidity: parseFloat((comp.humidity + (Math.random() - 0.5) * 2).toFixed(1)),
+            last_updated: new Date().toISOString()
+          }))
         };
       } else {
-        // SingleBin
-        const change = Math.random() * 3;
-        let newFill = Math.min(100, bin.current_fill + change);
-        
-        // Occasionally simulate emptying when above 90%
-        if (bin.current_fill > 90 && Math.random() > 0.7) {
-          newFill = Math.floor(Math.random() * 20);
-        }
-
         return {
           ...bin,
-          current_fill: Math.round(newFill),
-          status: newFill >= 80 ? 'critical' : newFill >= 65 ? 'warning' : 'active',
+          current_fill: Math.max(0, Math.min(100, bin.current_fill + (Math.random() - 0.3) * 2)),
+          fill_level: Math.max(0, Math.min(100, bin.fill_level + (Math.random() - 0.3) * 2)),
+          temperature: parseFloat((bin.temperature + (Math.random() - 0.5) * 0.5).toFixed(1)),
+          humidity: parseFloat((bin.humidity + (Math.random() - 0.5) * 2).toFixed(1)),
           last_updated: new Date().toISOString()
         };
       }
     });
-  }
-
-  // Start generating test data with realistic updates
-  static startTestDataGeneration() {
-    // Generate initial test bins
-    const smartBins = this.generateTestSmartBins(3);
-    const singleBins = this.generateTestSingleBins(2);
-    this.testBins = [...smartBins, ...singleBins];
-
-    // Store test data
-    localStorage.setItem('testMode', 'true');
+    
     localStorage.setItem('testBins', JSON.stringify(this.testBins));
-    localStorage.setItem('testAlerts', JSON.stringify(this.generateTestAlerts(this.testBins)));
-
-    // Update test data every 5 seconds to simulate real-time changes
-    this.testDataInterval = setInterval(() => {
-      this.testBins = this.updateFillLevels(this.testBins);
-      localStorage.setItem('testBins', JSON.stringify(this.testBins));
-      localStorage.setItem('testAlerts', JSON.stringify(this.generateTestAlerts(this.testBins)));
-      
-      // Trigger a custom event to notify components of data update
-      window.dispatchEvent(new CustomEvent('testDataUpdated'));
-    }, 5000);
+    
+    // Only dispatch variation events, not full phase changes
+    window.dispatchEvent(new CustomEvent('testDataVariation', { detail: { variation: true } }));
   }
 
-  // Stop generating test data
-  static stopTestDataGeneration() {
+  /**
+   * Stop Demo Mode
+   */
+  static stopDemoMode() {
+    console.log('🛑 Stopping Demo Mode...');
+    
+    if (this.demoPhaseTimer) {
+      clearInterval(this.demoPhaseTimer);
+      this.demoPhaseTimer = null;
+    }
+    
     if (this.testDataInterval) {
       clearInterval(this.testDataInterval);
       this.testDataInterval = null;
     }
-
-    // Clear test data from localStorage
+    
+    this.isTestMode = false;
+    this.testBins = [];
+    this.demoPhase = 0;
+    
     localStorage.removeItem('testMode');
+    localStorage.removeItem('demoMode');
     localStorage.removeItem('testBins');
     localStorage.removeItem('testAlerts');
-    this.testBins = [];
-
-    // Trigger event to notify components
-    window.dispatchEvent(new CustomEvent('testDataUpdated'));
+    localStorage.removeItem('demoPhase');
+    
+    window.dispatchEvent(new CustomEvent('testDataUpdated', { detail: { stopped: true } }));
   }
 
-  // Get current test mode status
+  /**
+   * Toggle test mode on/off
+   */
+  static toggleTestMode() {
+    this.isTestMode = !this.isTestMode;
+    
+    if (this.isTestMode) {
+      console.log('🧪 Test mode ENABLED - Starting demo with timed cycles...');
+      this.startDemoMode();
+    } else {
+      console.log('🧪 Test mode DISABLED - Stopping demo...');
+      this.stopDemoMode();
+    }
+    
+    return this.isTestMode;
+  }
+
+  /**
+   * Get current test mode status
+   */
   static isTestModeEnabled() {
     return localStorage.getItem('testMode') === 'true';
   }
 
-  // Get test data (bins separated by type)
+  /**
+   * Get current demo phase info
+   */
+  static getDemoPhaseInfo() {
+    const phase = parseInt(localStorage.getItem('demoPhase') || '0');
+    const phaseNames = ['Empty/Low Level', 'Mid Level', 'High Level', 'Critical/Alert'];
+    const phaseDescriptions = [
+      '🟢 Bins recently emptied - Low fill levels (0-25%)',
+      '🔵 Normal operation - Moderate fill levels (40-65%)',
+      '🟡 Attention needed - High fill levels (70-85%)',
+      '🔴 Urgent action required - Critical fill levels (86-100%)'
+    ];
+    
+    return {
+      phase,
+      phaseName: phaseNames[phase],
+      phaseDescription: phaseDescriptions[phase],
+      totalPhases: 4,
+      isActive: this.isTestModeEnabled()
+    };
+  }
+
+  /**
+   * Get test data (bins separated by type)
+   */
   static getTestData() {
     const testBinsStr = localStorage.getItem('testBins');
     const testAlertsStr = localStorage.getItem('testAlerts');
@@ -717,7 +865,9 @@ export class TestDataService {
     return { smartBins, singleBins, alerts };
   }
 
-  // Get compartments from test SmartBins
+  /**
+   * Get compartments from test SmartBins
+   */
   static getTestCompartments() {
     const { smartBins } = this.getTestData();
     const compartments = [];
@@ -729,5 +879,506 @@ export class TestDataService {
     });
 
     return compartments;
+  }
+
+  /**
+   * Publish sensor data to Firebase for a SingleBin
+   * This makes test data appear in dashboard cards that read from Firebase
+   */
+  static async publishSensorDataToFirebase(singleBin) {
+    try {
+      if (!singleBin.iot_device_id) {
+        console.warn(`⚠️ SingleBin ${singleBin.id} has no IoT device ID, skipping sensor data publish`);
+        return null;
+      }
+
+      const deviceId = singleBin.iot_device_id;
+      const collectionName = `sensor-data-${deviceId}`;
+      
+      // Format sensor data in The Things Network (TTN) format that FirebaseService expects
+      const sensorData = {
+        // Device identification
+        end_device_ids: {
+          device_id: deviceId,
+          application_ids: {
+            application_id: 'sortyx-test-app'
+          }
+        },
+        // Timestamp
+        received_at: new Date().toISOString(),
+        receivedAt: new Date().toISOString(),
+        
+        // Uplink message with decoded payload
+        uplink_message: {
+          decoded_payload: {
+            // Core sensor readings
+            distance: singleBin.distance || parseFloat(((100 - singleBin.current_fill) / 100 * 30).toFixed(2)),
+            Distance: singleBin.distance || parseFloat(((100 - singleBin.current_fill) / 100 * 30).toFixed(2)),
+            fillLevel: singleBin.fill_level || singleBin.current_fill,
+            FillLevel: singleBin.fill_level || singleBin.current_fill,
+            battery: singleBin.battery_level || 100,
+            Battery: singleBin.battery_level || 100,
+            
+            // Environmental sensors
+            temperature: singleBin.temperature,
+            Temperature: singleBin.temperature,
+            humidity: singleBin.humidity,
+            Humidity: singleBin.humidity,
+            
+            // Status
+            tilt: singleBin.tilt_status || 'normal',
+            Tilt: singleBin.tilt_status || 'normal',
+            
+            // Additional data
+            air_quality: singleBin.air_quality || null,
+            odour_level: singleBin.odour_level || null
+          },
+          f_port: 1,
+          f_cnt: Math.floor(Math.random() * 1000),
+          frm_payload: 'base64encodeddata==',
+          rx_metadata: [{
+            gateway_ids: { gateway_id: 'test-gateway' },
+            rssi: -60 - Math.random() * 20,
+            snr: 8 + Math.random() * 4
+          }]
+        }
+      };
+
+      // Save to Firestore using FirebaseService
+      const { db } = await import('../config/firebase');
+      const { collection, addDoc, setDoc, doc } = await import('firebase/firestore');
+      
+      if (!db) {
+        console.error('❌ Firestore is not initialized');
+        return null;
+      }
+      
+      // Add to device-specific collection
+      const sensorCollectionRef = collection(db, collectionName);
+      const docRef = await addDoc(sensorCollectionRef, sensorData);
+      
+      console.log(`✅ Published sensor data to ${collectionName} for ${deviceId}`, docRef.id);
+      
+      // Also add to all-sensor-data collection for discoverability
+      try {
+        const allDataRef = collection(db, 'all-sensor-data');
+        await addDoc(allDataRef, { ...sensorData, deviceId });
+      } catch (error) {
+        // Ignore if all-sensor-data collection doesn't exist
+        console.log('⚠️ Could not publish to all-sensor-data:', error.message);
+      }
+      
+      return docRef.id;
+      
+    } catch (error) {
+      console.error(`❌ Error publishing sensor data for ${singleBin.id}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Publish sensor data to Firebase for a SmartBin compartment
+   */
+  static async publishCompartmentSensorDataToFirebase(compartment, smartBin) {
+    try {
+      // Generate a device ID for this compartment
+      const deviceId = `${compartment.sensor_id || compartment.id}`;
+      const collectionName = `sensor-data-${deviceId}`;
+      
+      // Format sensor data in TTN format
+      const sensorData = {
+        end_device_ids: {
+          device_id: deviceId,
+          application_ids: {
+            application_id: 'sortyx-test-app'
+          }
+        },
+        received_at: new Date().toISOString(),
+        receivedAt: new Date().toISOString(),
+        
+        uplink_message: {
+          decoded_payload: {
+            distance: compartment.distance,
+            Distance: compartment.distance,
+            fillLevel: compartment.current_fill,
+            FillLevel: compartment.current_fill,
+            battery: compartment.battery_level || 100,
+            Battery: compartment.battery_level || 100,
+            temperature: compartment.temperature,
+            Temperature: compartment.temperature,
+            humidity: compartment.humidity,
+            Humidity: compartment.humidity,
+            tilt: 'normal',
+            Tilt: 'normal',
+            // Compartment-specific info
+            compartment_id: compartment.id,
+            smartbin_id: smartBin.id,
+            waste_type: compartment.waste_type
+          },
+          f_port: 1,
+          f_cnt: Math.floor(Math.random() * 1000),
+          frm_payload: 'base64encodeddata==',
+          rx_metadata: [{
+            gateway_ids: { gateway_id: 'test-gateway' },
+            rssi: -60 - Math.random() * 20,
+            snr: 8 + Math.random() * 4
+          }]
+        }
+      };
+
+      const { db } = await import('../config/firebase');
+      const { collection, addDoc } = await import('firebase/firestore');
+      
+      if (!db) {
+        console.error('❌ Firestore is not initialized');
+        return null;
+      }
+      
+      const sensorCollectionRef = collection(db, collectionName);
+      const docRef = await addDoc(sensorCollectionRef, sensorData);
+      
+      console.log(`✅ Published compartment sensor data to ${collectionName}`);
+      return docRef.id;
+      
+    } catch (error) {
+      console.error(`❌ Error publishing compartment sensor data:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Publish all test data to Firebase (bins, compartments, and sensor data)
+   */
+  static async publishTestDataToFirebase() {
+    try {
+      console.log('🚀 Publishing test data to Firebase...');
+      
+      const { smartBins, singleBins, alerts } = this.getTestData();
+      
+      if (smartBins.length === 0 && singleBins.length === 0) {
+        console.warn('⚠️ No test data available to publish');
+        return { success: false, message: 'No test data available' };
+      }
+
+      const results = {
+        smartBins: [],
+        singleBins: [],
+        compartments: [],
+        sensorData: [],
+        alerts: [],
+        errors: []
+      };
+
+      // Publish SmartBins and their compartments
+      for (const smartBin of smartBins) {
+        try {
+          // Save SmartBin to Firebase
+          const savedBin = await FirebaseService.saveSmartBin({
+            ...smartBin,
+            source: 'test-data',
+            created_by: 'test-mode'
+          });
+          results.smartBins.push(savedBin);
+
+          // Publish sensor data for each compartment
+          if (smartBin.compartments) {
+            for (const compartment of smartBin.compartments) {
+              try {
+                // Save compartment
+                const savedComp = await FirebaseService.saveCompartment({
+                  ...compartment,
+                  source: 'test-data'
+                });
+                results.compartments.push(savedComp);
+
+                // Publish sensor data
+                const sensorDocId = await this.publishCompartmentSensorDataToFirebase(compartment, smartBin);
+                if (sensorDocId) {
+                  results.sensorData.push({ compartmentId: compartment.id, sensorDocId });
+                }
+              } catch (error) {
+                console.error(`Error publishing compartment ${compartment.id}:`, error);
+                results.errors.push({ type: 'compartment', id: compartment.id, error: error.message });
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error publishing SmartBin ${smartBin.id}:`, error);
+          results.errors.push({ type: 'smartBin', id: smartBin.id, error: error.message });
+        }
+      }
+
+      // Publish SingleBins with sensor data
+      for (const singleBin of singleBins) {
+        try {
+          // Save SingleBin to Firebase
+          const savedBin = await FirebaseService.saveSingleBin({
+            ...singleBin,
+            source: 'test-data',
+            created_by: 'test-mode'
+          });
+          results.singleBins.push(savedBin);
+
+          // Publish sensor data to sensor-data-* collection
+          const sensorDocId = await this.publishSensorDataToFirebase(singleBin);
+          if (sensorDocId) {
+            results.sensorData.push({ binId: singleBin.id, deviceId: singleBin.iot_device_id, sensorDocId });
+          }
+        } catch (error) {
+          console.error(`Error publishing SingleBin ${singleBin.id}:`, error);
+          results.errors.push({ type: 'singleBin', id: singleBin.id, error: error.message });
+        }
+      }
+
+      // Publish alerts
+      for (const alert of alerts) {
+        try {
+          const savedAlert = await FirebaseService.saveAlert({
+            ...alert,
+            source: 'test-data'
+          });
+          results.alerts.push(savedAlert);
+        } catch (error) {
+          console.error(`Error publishing alert ${alert.id}:`, error);
+          results.errors.push({ type: 'alert', id: alert.id, error: error.message });
+        }
+      }
+
+      console.log('✅ Test data published to Firebase:', {
+        smartBins: results.smartBins.length,
+        singleBins: results.singleBins.length,
+        compartments: results.compartments.length,
+        sensorData: results.sensorData.length,
+        alerts: results.alerts.length,
+        errors: results.errors.length
+      });
+
+      return {
+        success: true,
+        results,
+        message: `Published ${results.smartBins.length} SmartBins, ${results.singleBins.length} SingleBins, and ${results.sensorData.length} sensor data entries`
+      };
+
+    } catch (error) {
+      console.error('❌ Error publishing test data to Firebase:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Update sensor data continuously while test mode is active
+   */
+  static async updateSensorDataContinuously() {
+    if (!this.isTestModeEnabled()) {
+      return;
+    }
+
+    const { singleBins, smartBins } = this.getTestData();
+
+    // Update sensor data for SingleBins
+    for (const singleBin of singleBins) {
+      try {
+        await this.publishSensorDataToFirebase(singleBin);
+      } catch (error) {
+        console.error(`Error updating sensor data for ${singleBin.id}:`, error);
+      }
+    }
+
+    // Update sensor data for SmartBin compartments
+    for (const smartBin of smartBins) {
+      if (smartBin.compartments) {
+        for (const compartment of smartBin.compartments) {
+          try {
+            await this.publishCompartmentSensorDataToFirebase(compartment, smartBin);
+          } catch (error) {
+            console.error(`Error updating compartment sensor data for ${compartment.id}:`, error);
+          }
+        }
+      }
+    }
+
+    console.log('🔄 Sensor data updated in Firebase');
+  }
+
+  /**
+   * Enhanced Start Demo Mode with Firebase publishing
+   */
+  static async startDemoModeWithFirebase() {
+    console.log('🎬 Starting Demo Mode with Firebase publishing...');
+    
+    this.isTestMode = true;
+    this.demoPhase = 0;
+    
+    // Generate initial phase data
+    this.updateDemoPhase();
+    
+    // Publish initial data to Firebase
+    await this.publishTestDataToFirebase();
+    
+    // Set up phase progression timer
+    this.demoPhaseTimer = setInterval(async () => {
+      this.demoPhase = (this.demoPhase + 1) % 4;
+      this.updateDemoPhase();
+      
+      // Publish updated data to Firebase
+      await this.publishTestDataToFirebase();
+      
+      const phaseNames = ['Empty/Low Level', 'Mid Level', 'High Level', 'Critical/Alert'];
+      console.log(`🎬 Demo Phase ${this.demoPhase + 1}/4: ${phaseNames[this.demoPhase]}`);
+    }, this.PHASE_DURATION);
+    
+    // Set up real-time sensor updates (every 2 seconds)
+    this.testDataInterval = setInterval(async () => {
+      this.updateDemoPhaseWithVariation();
+      // Update sensor data in Firebase
+      await this.updateSensorDataContinuously();
+    }, 2000);
+    
+    localStorage.setItem('testMode', 'true');
+    localStorage.setItem('demoMode', 'true');
+    localStorage.setItem('demoPhase', this.demoPhase.toString());
+    
+    return {
+      success: true,
+      message: 'Demo mode started with Firebase publishing'
+    };
+  }
+
+  /**
+   * Enhanced Toggle with Firebase support
+   */
+  static async toggleTestModeWithFirebase() {
+    this.isTestMode = !this.isTestMode;
+    
+    if (this.isTestMode) {
+      console.log('🧪 Test mode ENABLED - Starting demo with Firebase publishing...');
+      return await this.startDemoModeWithFirebase();
+    } else {
+      console.log('🧪 Test mode DISABLED - Stopping demo and clearing Firebase data...');
+      this.stopDemoMode();
+      // Optionally clear test data from Firebase
+      // await this.clearTestDataFromFirebase();
+      return {
+        success: true,
+        message: 'Test mode stopped'
+      };
+    }
+  }
+
+  /**
+   * Generate test data and publish to Firebase in one operation
+   */
+  static async generateAndPublishTestData(options = {}) {
+    try {
+      console.log('🚀 Generating and publishing test data with Firebase support...');
+      
+      // Generate dataset
+      const dataset = await this.generateCompleteDataset(options);
+      
+      // Store in localStorage for immediate UI updates
+      const smartBins = dataset.smartBins;
+      const singleBins = dataset.singleBins;
+      const allBins = [...smartBins, ...singleBins];
+      
+      localStorage.setItem('testBins', JSON.stringify(allBins));
+      localStorage.setItem('testAlerts', JSON.stringify(dataset.alerts));
+      
+      // Publish to Firebase
+      const publishResults = {
+        smartBins: [],
+        singleBins: [],
+        compartments: [],
+        sensorData: [],
+        alerts: [],
+        errors: []
+      };
+
+      // Publish SmartBins
+      for (const smartBin of smartBins) {
+        try {
+          const saved = await FirebaseService.saveSmartBin({
+            ...smartBin,
+            source: 'test-data'
+          });
+          publishResults.smartBins.push(saved);
+
+          // Publish compartment sensor data
+          if (smartBin.compartments) {
+            for (const comp of smartBin.compartments) {
+              const sensorDocId = await this.publishCompartmentSensorDataToFirebase(comp, smartBin);
+              if (sensorDocId) {
+                publishResults.sensorData.push({ compartmentId: comp.id, sensorDocId });
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error publishing SmartBin ${smartBin.id}:`, error);
+          publishResults.errors.push({ type: 'smartBin', id: smartBin.id, error: error.message });
+        }
+      }
+
+      // Publish SingleBins with sensor data
+      for (const singleBin of singleBins) {
+        try {
+          const saved = await FirebaseService.saveSingleBin({
+            ...singleBin,
+            source: 'test-data'
+          });
+          publishResults.singleBins.push(saved);
+
+          // Publish sensor data
+          const sensorDocId = await this.publishSensorDataToFirebase(singleBin);
+          if (sensorDocId) {
+            publishResults.sensorData.push({ binId: singleBin.id, deviceId: singleBin.iot_device_id, sensorDocId });
+          }
+        } catch (error) {
+          console.error(`Error publishing SingleBin ${singleBin.id}:`, error);
+          publishResults.errors.push({ type: 'singleBin', id: singleBin.id, error: error.message });
+        }
+      }
+
+      // Publish alerts
+      for (const alert of dataset.alerts) {
+        try {
+          const saved = await FirebaseService.saveAlert({
+            ...alert,
+            source: 'test-data'
+          });
+          publishResults.alerts.push(saved);
+        } catch (error) {
+          console.error(`Error publishing alert ${alert.id}:`, error);
+          publishResults.errors.push({ type: 'alert', id: alert.id, error: error.message });
+        }
+      }
+
+      console.log('✅ Test data generated and published:', {
+        smartBins: publishResults.smartBins.length,
+        singleBins: publishResults.singleBins.length,
+        sensorData: publishResults.sensorData.length,
+        alerts: publishResults.alerts.length,
+        errors: publishResults.errors.length
+      });
+
+      // Dispatch event to notify components
+      window.dispatchEvent(new CustomEvent('testDataPublished', {
+        detail: {
+          dataset,
+          publishResults
+        }
+      }));
+
+      return {
+        success: true,
+        dataset,
+        publishResults
+      };
+
+    } catch (error) {
+      console.error('❌ Error generating and publishing test data:', error);
+      throw error;
+    }
   }
 }

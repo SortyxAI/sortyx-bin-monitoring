@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -6,6 +5,7 @@ import { User } from "@/api/entities";
 // import { Logo } from "@/assets/Logo.jpeg"
 import Logo from "@/assets/Logo.jpeg"
 import DarkModeLogo from "@/assets/Logo-darkmode.jpeg"
+import DevToolsDropdown from "@/components/DevTools/DevToolsDropdown";
 import { 
   LayoutDashboard, 
   Settings, 
@@ -289,6 +289,9 @@ export default function Layout({ children, currentPageName }) {
                 </motion.div>
               ))}
             </nav>
+
+            {/* DevTools Dropdown */}
+            <DevToolsDropdown />
 
             {/* User Menu */}
             <div className="flex items-center gap-2">

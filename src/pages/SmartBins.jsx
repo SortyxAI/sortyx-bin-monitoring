@@ -73,6 +73,7 @@ export default function SmartBins() {
   // Compartment Management Modal state
   const [isCompartmentModalOpen, setIsCompartmentModalOpen] = useState(false);
   const [smartBinForCompartments, setSmartBinForCompartments] = useState(null);
+  const [initialCompartmentToEdit, setInitialCompartmentToEdit] = useState(null);
 
   // Refs for scrolling to forms
   const binFormRef = useRef(null);
@@ -662,6 +663,7 @@ export default function SmartBins() {
           <Button
             onClick={(e) => {
               e.stopPropagation();
+              // Open MultiCompartmentSmartBinModal for creating new SmartBin
               setIsEditSmartBinModalOpen(true);
               setBinToEdit(null);
             }}
@@ -811,11 +813,9 @@ export default function SmartBins() {
                                   <DropdownMenuItem
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setEditingCompartment(null);
-                                      setSelectedSmartBin(smartBin);
-                                      setShowCompartmentForm(true);
-                                      setShowBinForm(false);
-                                      setShowSingleBinForm(false);
+                                      setSmartBinForCompartments(smartBin);
+                                      setInitialCompartmentToEdit(null);
+                                      setIsCompartmentModalOpen(true);
                                     }}
                                     className="dark:text-gray-200 dark:hover:bg-purple-500/20"
                                   >
@@ -880,11 +880,10 @@ export default function SmartBins() {
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setEditingCompartment(null);
-                                      setSelectedSmartBin(smartBin);
-                                      setShowCompartmentForm(true);
-                                      setShowBinForm(false);
-                                      setShowSingleBinForm(false);
+                                      // Open Manage Compartments modal for adding compartments
+                                      setSmartBinForCompartments(smartBin);
+                                      setInitialCompartmentToEdit(null);
+                                      setIsCompartmentModalOpen(true);
                                     }}
                                     className="dark:border-purple-600 dark:text-purple-300 dark:hover:bg-purple-600/20"
                                   >
@@ -902,11 +901,10 @@ export default function SmartBins() {
                                       className="mt-2 dark:border-purple-600 dark:text-purple-300"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setEditingCompartment(null);
-                                        setSelectedSmartBin(smartBin);
-                                        setShowCompartmentForm(true);
-                                        setShowBinForm(false);
-                                        setShowSingleBinForm(false);
+                                        // Open Manage Compartments modal for adding first compartment
+                                        setSmartBinForCompartments(smartBin);
+                                        setInitialCompartmentToEdit(null);
+                                        setIsCompartmentModalOpen(true);
                                       }}
                                     >
                                       Add First Compartment
@@ -921,11 +919,11 @@ export default function SmartBins() {
                                           key={compartment.id}
                                           compartment={compartment}
                                           onEdit={() => {
-                                            setEditingCompartment(compartment);
-                                            setSelectedSmartBin(smartBin);
-                                            setShowCompartmentForm(true);
-                                            setShowBinForm(false);
-                                            setShowSingleBinForm(false);
+                                            // Open CompartmentManagementModal instead of inline form
+                                            setSmartBinForCompartments(smartBin);
+                                            setIsCompartmentModalOpen(true);
+                                            setInitialCompartmentToEdit(compartment); // Set the initial compartment to edit
+                                            // The modal will handle the edit mode internally
                                           }}
                                           onDelete={() => handleDeleteCompartment(compartment.id)}
                                         />
@@ -1019,8 +1017,10 @@ export default function SmartBins() {
         onClose={() => {
           setIsCompartmentModalOpen(false);
           setSmartBinForCompartments(null);
+          setInitialCompartmentToEdit(null); // Reset the initial compartment to edit
         }}
         smartBin={smartBinForCompartments}
+        initialCompartment={initialCompartmentToEdit} // Pass the initial compartment to edit
         onSave={async () => {
           await loadData();
         }}

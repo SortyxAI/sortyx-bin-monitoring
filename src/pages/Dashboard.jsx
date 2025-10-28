@@ -56,6 +56,7 @@ export default function Dashboard() {
 
   // Test data mode state
   const [testDataEnabled, setTestDataEnabled] = useState(TestDataService.isTestDataEnabled);
+  const [demoPhaseInfo, setDemoPhaseInfo] = useState(null);
 
   // Subscribe to real-time Firebase data
   useEffect(() => {
@@ -225,6 +226,43 @@ export default function Dashboard() {
     };
   }, [testDataEnabled]);
 
+  // Subscribe to test data updates
+  useEffect(() => {
+    const handleTestDataUpdate = (event) => {
+      console.log('Test data updated:', event.detail);
+      
+      if (event.detail.stopped) {
+        setTestDataEnabled(false);
+        setDemoPhaseInfo(null);
+        return;
+      }
+      
+      // Update demo phase info
+      const phaseInfo = TestDataService.getDemoPhaseInfo();
+      setDemoPhaseInfo(phaseInfo);
+      
+      // Reload data when test data updates
+      if (TestDataService.isTestDataEnabled) {
+        const testData = TestDataService.getTestData();
+        setSmartBins(testData.smartBins);
+        setCompartments(TestDataService.getTestCompartments());
+        setSingleBins(testData.singleBins);
+        setAlerts(testData.alerts);
+      }
+    };
+
+    window.addEventListener('testDataUpdated', handleTestDataUpdate);
+    
+    // Initialize demo phase info if test mode is active
+    if (TestDataService.isTestDataEnabled) {
+      setDemoPhaseInfo(TestDataService.getDemoPhaseInfo());
+    }
+
+    return () => {
+      window.removeEventListener('testDataUpdated', handleTestDataUpdate);
+    };
+  }, []);
+
   // Handle bin card click to show details
   const handleBinCardClick = (bin, type) => {
     console.log('Dashboard bin card clicked:', bin, type);
@@ -289,22 +327,6 @@ export default function Dashboard() {
   const isFreePlan = user?.plan === 'free';
   const hasReachedSmartBinLimit = isFreePlan && smartBins.length >= MAX_FREE_BINS;
   const hasReachedSingleBinLimit = isFreePlan && singleBins.length >= MAX_FREE_BINS;
-
-  // Handle test data toggle
-  const handleTestDataToggle = () => {
-    const newState = !testDataEnabled;
-    TestDataService.toggleTestData();
-    setTestDataEnabled(newState);
-    setLoading(true);
-    
-    // Show notification
-    const message = newState 
-      ? '🧪 Test Data Mode Enabled - Showing realistic sample data' 
-      : '✅ Test Data Mode Disabled - Showing real data';
-    
-    // You can add a toast notification here if you have a toast system
-    console.log(message);
-  };
 
   if (loading) {
     return (
@@ -425,21 +447,72 @@ export default function Dashboard() {
           {firebaseError && <span className="ml-2 text-xs">({firebaseError})</span>}
         </div>
 
-        {/* Test Data Toggle */}
-        <motion.button
-          onClick={handleTestDataToggle}
-          className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium shadow-lg transition-all ${
-            testDataEnabled
-              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-2 border-amber-300 dark:border-amber-600'
-              : 'bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700/50'
-          }`}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <FlaskConical className={`w-4 h-4 mr-2 ${testDataEnabled ? 'animate-pulse' : ''}`} />
-          {testDataEnabled ? 'Test Data Mode ON' : 'Test Data Mode'}
-        </motion.button>
+        {/* Demo Phase Indicator */}
+        {testDataEnabled && demoPhaseInfo && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/40 dark:to-indigo-900/40 text-purple-800 dark:text-purple-200 border-2 border-purple-300 dark:border-purple-600"
+          >
+            <motion.div
+              className="w-3 h-3 rounded-full mr-2 bg-gradient-to-r from-purple-500 to-indigo-500"
+              animate={{ 
+                scale: [1, 1.3, 1],
+                rotate: [0, 180, 360]
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+            <span className="font-semibold">Phase {demoPhaseInfo.phase + 1}/4:</span>
+            <span className="ml-1">{demoPhaseInfo.phaseName}</span>
+          </motion.div>
+        )}
       </motion.div>
+
+      {/* Demo Phase Description Banner */}
+      {testDataEnabled && demoPhaseInfo && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/30 dark:to-indigo-900/30 border-2 border-purple-200 dark:border-purple-600 rounded-xl p-4 shadow-lg"
+        >
+          <div className="flex items-start gap-4">
+            <motion.div
+              animate={{ 
+                scale: [1, 1.1, 1],
+                rotate: [0, 5, -5, 0]
+              }}
+              transition={{ duration: 3, repeat: Infinity }}
+              className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center flex-shrink-0"
+            >
+              <FlaskConical className="w-6 h-6 text-white" />
+            </motion.div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">
+                🎬 Demo Mode: {demoPhaseInfo.phaseName}
+              </h3>
+              <p className="text-sm text-purple-700 dark:text-purple-200">
+                {demoPhaseInfo.phaseDescription}
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex-1 h-2 bg-purple-200 dark:bg-purple-800 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-purple-500 to-indigo-500"
+                    initial={{ width: "0%" }}
+                    animate={{ width: `${((demoPhaseInfo.phase + 1) / demoPhaseInfo.totalPhases) * 100}%` }}
+                    transition={{ duration: 0.5 }}
+                  />
+                </div>
+                <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                  {demoPhaseInfo.phase + 1}/{demoPhaseInfo.totalPhases}
+                </span>
+              </div>
+              <p className="text-xs text-purple-600 dark:text-purple-300 mt-2">
+                ⏱️ Phases auto-advance every 8 seconds • Watch the bins update in real-time
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
