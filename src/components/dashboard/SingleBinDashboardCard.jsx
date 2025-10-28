@@ -13,14 +13,20 @@ import {
   AlertTriangle,
   Settings,
   Wifi,
-  MapPin
+  MapPin,
+  Activity
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { Link } from "react-router-dom";
-import { createPageUrl } from "@/utils";
+import { createPageUrl, calculateFillLevel } from "@/utils";
 
 const SingleBinPieChart = ({ singleBin }) => {
-  const fillLevel = singleBin.current_fill || 0;
+  // Calculate fill level using the formula: Fill Level % = ((binHeight - sensorValue) / binHeight) × 100
+  const fillLevel = calculateFillLevel(
+    singleBin.sensorValue || singleBin.sensor_value,
+    singleBin.binHeight || singleBin.bin_height
+  );
+  
   const data = [
     { 
       name: 'Filled', 
@@ -64,9 +70,17 @@ const SingleBinPieChart = ({ singleBin }) => {
 };
 
 export default function SingleBinDashboardCard({ singleBin, onCardClick }) {
-  const fillPercentage = singleBin.current_fill || 0;
-  const isOverThreshold = fillPercentage >= (singleBin.fill_threshold || 90);
+  // Calculate fill level using the formula: Fill Level % = ((binHeight - sensorValue) / binHeight) × 100
+  const fillPercentage = calculateFillLevel(
+    singleBin.sensorValue || singleBin.sensor_value,
+    singleBin.binHeight || singleBin.bin_height
+  );
   
+  const isOverThreshold = fillPercentage >= (singleBin.fill_threshold || 90);
+
+  // Extract deviceId from multiple possible field names
+  const deviceId = singleBin.deviceId || singleBin.device_id || singleBin.iot_device_id || null;
+
   const binTypeColors = {
     recyclable: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
     general_waste: 'bg-gray-100 text-gray-700 dark:bg-gray-600/40 dark:text-gray-300',
@@ -77,60 +91,81 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick }) {
     mixed: 'bg-gray-100 text-gray-700 dark:bg-gray-600/40 dark:text-gray-300'
   };
 
-  const sensorData = [];
+  // Separate sensor data collection - excluding fill level
+  const compartmentSensorData = [];
   
+  // Battery sensor - ALWAYS show, default to 0% if offline or no data
+  if (singleBin.sensors_enabled?.battery_level) {
+    const isOnline = singleBin.status === 'active' && 
+                     singleBin.last_sensor_update && 
+                     (Date.now() - new Date(singleBin.last_sensor_update).getTime()) < 60000;
+    
+    const batteryValue = (isOnline && singleBin.battery_level !== undefined) 
+      ? singleBin.battery_level 
+      : 0; // Default to 0% when offline or no data
+    
+    compartmentSensorData.push({
+      type: 'battery',
+      label: 'Battery',
+      value: batteryValue,
+      unit: '%',
+      icon: Battery,
+      color: batteryValue < 20 ? 'text-red-500' : batteryValue < 50 ? 'text-yellow-500' : 'text-green-500',
+      bgColor: batteryValue < 20 ? 'from-red-500 to-red-600' : batteryValue < 50 ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600',
+      isOffline: !isOnline
+    });
+  }
+
   if (singleBin.sensors_enabled?.temperature && singleBin.temperature !== undefined) {
-    sensorData.push({
+    compartmentSensorData.push({
       type: 'temperature',
+      label: 'Temperature',
       value: singleBin.temperature,
       unit: '°C',
       icon: Thermometer,
-      color: singleBin.temperature > (singleBin.temp_threshold || 50) ? 'text-red-500' : 'text-blue-500'
+      color: singleBin.temperature > (singleBin.temp_threshold || 50) ? 'text-red-500' : 'text-blue-500',
+      bgColor: singleBin.temperature > (singleBin.temp_threshold || 50) ? 'from-red-500 to-red-600' : 'from-blue-500 to-blue-600'
     });
   }
   
   if (singleBin.sensors_enabled?.humidity && singleBin.humidity !== undefined) {
-    sensorData.push({
+    compartmentSensorData.push({
       type: 'humidity',
+      label: 'Humidity',
       value: singleBin.humidity,
       unit: '%',
       icon: Droplets,
-      color: 'text-blue-400'
+      color: 'text-blue-400',
+      bgColor: 'from-blue-400 to-blue-500'
     });
   }
   
   if (singleBin.sensors_enabled?.air_quality && singleBin.air_quality !== undefined) {
-    sensorData.push({
+    compartmentSensorData.push({
       type: 'air_quality',
+      label: 'Air Quality',
       value: singleBin.air_quality,
-      unit: 'AQI',
+      unit: ' AQI',
       icon: Wind,
-      color: singleBin.air_quality > 150 ? 'text-red-500' : singleBin.air_quality > 100 ? 'text-yellow-500' : 'text-green-500'
-    });
-  }
-
-  if (singleBin.sensors_enabled?.battery_level && singleBin.battery_level !== undefined) {
-    sensorData.push({
-      type: 'battery',
-      value: singleBin.battery_level,
-      unit: '%',
-      icon: Battery,
-      color: singleBin.battery_level < 20 ? 'text-red-500' : singleBin.battery_level < 50 ? 'text-yellow-500' : 'text-green-500'
+      color: singleBin.air_quality > 150 ? 'text-red-500' : singleBin.air_quality > 100 ? 'text-yellow-500' : 'text-green-500',
+      bgColor: singleBin.air_quality > 150 ? 'from-red-500 to-red-600' : singleBin.air_quality > 100 ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600'
     });
   }
 
   if (singleBin.sensors_enabled?.odour_detection && singleBin.odour_level !== undefined) {
-    sensorData.push({
+    compartmentSensorData.push({
       type: 'odour',
+      label: 'Odour Level',
       value: singleBin.odour_level,
-      unit: '',
+      unit: '%',
       icon: Scan,
-      color: singleBin.odour_level > 70 ? 'text-red-500' : 'text-green-500'
+      color: singleBin.odour_level > 70 ? 'text-red-500' : 'text-green-500',
+      bgColor: singleBin.odour_level > 70 ? 'from-red-500 to-red-600' : 'from-green-500 to-green-600'
     });
   }
 
   const isLiveActive = singleBin.last_sensor_update && 
-    (Date.now() - new Date(singleBin.last_sensor_update).getTime()) < 60000; // Live if updated in last 60 seconds
+    (Date.now() - new Date(singleBin.last_sensor_update).getTime()) < 60000;
 
   return (
     <motion.div
@@ -148,7 +183,7 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick }) {
         onClick={() => onCardClick && onCardClick(singleBin, 'singlebin')}
       >
         <CardContent className="p-6">
-          {/* Header */}
+          {/* Layer 1: Bin Information Header */}
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
@@ -173,9 +208,11 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick }) {
                   {singleBin.location}
                 </p>
               )}
-              <Badge className={`${binTypeColors[singleBin.bin_type || singleBin.type]} mt-2`}>
-                {(singleBin.bin_type || singleBin.type || 'mixed').replace('_', ' ')}
-              </Badge>
+              {singleBin.description && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 line-clamp-1">
+                  {singleBin.description}
+                </p>
+              )}
             </div>
             
             <Link to={createPageUrl("SmartBins")}>
@@ -189,9 +226,66 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick }) {
             </Link>
           </div>
 
-          {/* Fill Level Section */}
+          {/* Layer 2: Compartment Information */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-3 mb-3 border border-blue-200 dark:border-blue-700">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
+                Compartment
+              </span>
+              {singleBin.compartment_name && (
+                <Badge className="bg-blue-600 text-white text-[10px] px-2 py-0 font-mono">
+                  {singleBin.compartment_name}
+                </Badge>
+              )}
+            </div>
+            
+            {/* Height and Bin Type Display */}
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {(singleBin.binHeight || singleBin.bin_height) && (
+                <div className="bg-white/70 dark:bg-indigo-900/40 rounded px-2 py-1.5 border border-blue-300 dark:border-blue-600">
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <BarChart3 className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                    <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">Height</span>
+                  </div>
+                  <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">{singleBin.binHeight || singleBin.bin_height} cm</span>
+                </div>
+              )}
+              <div className="bg-white/70 dark:bg-indigo-900/40 rounded px-2 py-1.5 border border-blue-300 dark:border-blue-600">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">Bin Type</span>
+                </div>
+                <Badge className={`${binTypeColors[singleBin.bin_type || singleBin.type]} text-[10px] px-1.5`}>
+                  {(singleBin.bin_type || singleBin.type || 'mixed').replace('_', ' ')}
+                </Badge>
+              </div>
+            </div>
+            
+            {/* Device ID Display */}
+            {deviceId && (
+              <div className="bg-white/70 dark:bg-indigo-900/40 rounded px-2 py-1.5 border border-blue-300 dark:border-blue-600 mb-2">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <Wifi className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                  <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">Device ID</span>
+                </div>
+                <span className="font-mono text-xs text-blue-700 dark:text-blue-300 block break-all">{deviceId}</span>
+              </div>
+            )}
+            
+            {/* Status Badge */}
+            <div className="mt-2">
+              <Badge className={`${
+                singleBin.status === 'active' 
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                  : 'bg-gray-100 text-gray-700 dark:bg-gray-600/40 dark:text-gray-300'
+              } text-[10px]`}>
+                {singleBin.status === 'active' ? '● Active' : '○ Suspended'}
+              </Badge>
+            </div>
+          </div>
+
+          {/* Layer 3: Fill Level Section - ONLY FILL LEVEL */}
           <div className="bg-gradient-to-r from-slate-50 to-indigo-50 dark:from-purple-900/50 dark:to-indigo-900/50 rounded-xl p-4 mb-4 border border-indigo-200 dark:border-indigo-700">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 mb-3">
               <SingleBinPieChart singleBin={singleBin} />
               <div className="flex-1">
                 <div className="flex justify-between text-sm mb-2">
@@ -216,65 +310,140 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick }) {
                     transition={{ duration: 0.8 }}
                   />
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Capacity: {singleBin.capacity}L • Alert: {singleBin.fill_threshold}%
+              </div>
+            </div>
+            {/* Capacity and Alert Threshold Display */}
+            <div className="flex items-center justify-between text-xs bg-white/60 dark:bg-indigo-900/40 rounded-lg px-3 py-2 border border-indigo-200 dark:border-indigo-700">
+              <div className="flex items-center gap-4">
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Capacity:</span>
+                  <span className="ml-1 font-semibold text-gray-700 dark:text-gray-200">{singleBin.capacity || 100}L</span>
+                </div>
+                <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Alert Threshold:</span>
+                  <span className="ml-1 font-semibold text-orange-600 dark:text-orange-400">{singleBin.fill_threshold || 80}%</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Sensor Data Section */}
-          {sensorData.length > 0 && (
-            <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-lg p-4 border-2 border-amber-200 dark:border-amber-700/40">
+          {/* Layer 4: Compartment Sensor Section - ALL OTHER SENSORS */}
+          {compartmentSensorData.length > 0 && (
+            <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-900/20 dark:via-teal-900/20 dark:to-cyan-900/20 rounded-xl p-4 border-2 border-emerald-200 dark:border-emerald-700/50 shadow-inner">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-medium text-amber-700 dark:text-amber-300 flex items-center gap-2">
-                  <span>Sensor Readings</span>
-                  <motion.div
-                    className="flex items-center gap-1"
-                    animate={isLiveActive ? {
-                      scale: [1, 1.1, 1],
-                      opacity: [1, 0.7, 1]
-                    } : {}}
-                    transition={isLiveActive ? {
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    } : {}}
-                  >
-                    <Wifi className={`w-3 h-3 ${isLiveActive ? 'text-green-500' : 'text-gray-400'}`} />
-                    <Badge 
-                      className={`text-[9px] px-1 py-0 ${
-                        isLiveActive 
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' 
-                          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                      }`}
-                    >
-                      {isLiveActive ? 'LIVE' : 'OFFLINE'}
-                    </Badge>
-                  </motion.div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center shadow-md">
+                    <Activity className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                      Compartment Sensors
+                    </h5>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">Real-time sensor monitoring</p>
+                  </div>
                 </div>
+                <motion.div
+                  className="flex items-center gap-1"
+                  animate={isLiveActive ? {
+                    scale: [1, 1.1, 1],
+                    opacity: [1, 0.7, 1]
+                  } : {}}
+                  transition={isLiveActive ? {
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  } : {}}
+                >
+                  <Wifi className={`w-3 h-3 ${isLiveActive ? 'text-green-500' : 'text-gray-400'}`} />
+                  <Badge 
+                    className={`text-[9px] px-1.5 py-0.5 ${
+                      isLiveActive 
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' 
+                        : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                    }`}
+                  >
+                    {isLiveActive ? 'LIVE' : 'OFFLINE'}
+                  </Badge>
+                </motion.div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                {sensorData.map((sensor, index) => (
+
+              {/* Sensor Grid - Dynamic Layout based on count */}
+              <div className={`grid ${compartmentSensorData.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
+                {compartmentSensorData.map((sensor, index) => (
                   <motion.div
                     key={sensor.type}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="bg-white/80 dark:bg-amber-800/30 rounded-md p-3 border border-amber-200 dark:border-amber-600/30 shadow-sm"
+                    className="bg-white/90 dark:bg-emerald-800/30 rounded-lg p-3 border border-emerald-200 dark:border-emerald-600/40 shadow-sm hover:shadow-md transition-shadow"
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <sensor.icon className={`w-4 h-4 ${sensor.color}`} />
-                      <span className="text-xs text-gray-600 dark:text-gray-200 uppercase tracking-wide">
-                        {sensor.type.replace('_', ' ')}
-                      </span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 rounded-md bg-gradient-to-br ${sensor.bgColor.replace('from-', 'from-').replace('to-', 'to-')}/10 flex items-center justify-center`}>
+                          <sensor.icon className={`w-4 h-4 ${sensor.color}`} />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                          {sensor.label}
+                        </span>
+                      </div>
+                      {/* Show offline badge for battery sensor when not connected */}
+                      {sensor.type === 'battery' && sensor.isOffline && (
+                        <Badge className="bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 text-[9px] px-1.5 py-0">
+                          Offline
+                        </Badge>
+                      )}
                     </div>
-                    <div className="text-base font-bold text-gray-900 dark:text-white">
-                      {sensor.value}{sensor.unit}
+                    
+                    {/* Value Display with Progress Bar */}
+                    <div className="space-y-2">
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-xl font-bold text-gray-900 dark:text-white">
+                          {sensor.value}{sensor.unit}
+                        </span>
+                        {(sensor.type === 'battery' || sensor.type === 'humidity' || sensor.type === 'odour') && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {sensor.value < 20 ? 'Critical' : sensor.value < 50 ? 'Low' : 'Good'}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Progress bar for percentage-based sensors */}
+                      {(sensor.type === 'battery' || sensor.type === 'humidity' || sensor.type === 'odour') && (
+                        <div className="h-2 bg-gray-200 dark:bg-emerald-900/60 rounded-full overflow-hidden shadow-inner">
+                          <motion.div
+                            className={`h-full rounded-full bg-gradient-to-r ${sensor.bgColor}`}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${sensor.value}%` }}
+                            transition={{ duration: 0.8, delay: index * 0.1 }}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Alert for low battery */}
+                      {sensor.type === 'battery' && sensor.value < 20 && (
+                        <motion.p 
+                          className="text-[10px] text-red-600 dark:text-red-400 mt-1 flex items-center gap-1"
+                          animate={{ opacity: [1, 0.5, 1] }}
+                          transition={{ duration: 1.5, repeat: Infinity }}
+                        >
+                          <AlertTriangle className="w-3 h-3" />
+                          Requires attention
+                        </motion.p>
+                      )}
                     </div>
                   </motion.div>
                 ))}
               </div>
+
+              {/* Timestamp of last update */}
+              {singleBin.last_sensor_update && (
+                <div className="mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-700/40">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 text-center">
+                    Last updated: {new Date(singleBin.last_sensor_update).toLocaleString()}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

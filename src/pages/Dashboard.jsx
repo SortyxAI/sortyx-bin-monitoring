@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { SmartBin } from "@/api/entities";
 import { Compartment } from "@/api/entities";
@@ -6,6 +5,7 @@ import { SingleBin } from "@/api/entities";
 import { Alert as AlertEntity } from "@/api/entities";
 import { User } from "@/api/entities";
 import { FirebaseService } from "@/services/firebaseService";
+import { TestDataService } from "@/services/testDataService";
 import { motion, AnimatePresence } from "framer-motion";
 import "@/utils/debugFirestore";
 import "@/utils/testBinIntegration";
@@ -14,6 +14,7 @@ import {
   Activity,
   BarChart3,
   ChevronDown,
+  FlaskConical,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +53,9 @@ export default function Dashboard() {
   const [showBinDetails, setShowBinDetails] = useState(false);
   const [selectedBinForDetails, setSelectedBinForDetails] = useState(null);
   const [selectedBinType, setSelectedBinType] = useState(null);
+
+  // Test data mode state
+  const [testDataEnabled, setTestDataEnabled] = useState(TestDataService.isTestDataEnabled);
 
   // Subscribe to real-time Firebase data
   useEffect(() => {
@@ -96,75 +100,107 @@ export default function Dashboard() {
 
         console.log("Loading Firebase data...");
         
-        const [smartBinData, compartmentData, singleBinData, alertData, firebaseSmartBins, firebaseSingleBins] = await Promise.all([
-          SmartBin.list().catch(err => {
-            console.error("SmartBin.list error:", err);
-            return [];
-          }),
-          Compartment.list().catch(err => {
-            console.error("Compartment.list error:", err);
-            return [];
-          }),
-          SingleBin.list().catch(err => {
-            console.error("SingleBin.list error:", err);
-            return [];
-          }),
-          FirebaseService.getAlerts().catch(err => {
-            console.error("FirebaseService.getAlerts error:", err);
-            return [];
-          }),
-          FirebaseService.getSmartBins().catch(err => {
-            console.error("FirebaseService.getSmartBins error:", err);
-            return [];
-          }),
-          FirebaseService.getSingleBins().catch(err => {
-            console.error("FirebaseService.getSingleBins error:", err);
-            return [];
-          })
-        ]);
-        
-        // Combine API data with Firebase data
-        const combinedSmartBins = [...smartBinData, ...firebaseSmartBins];
-        const combinedSingleBins = [...singleBinData, ...firebaseSingleBins];
-        
-        console.log("Firebase SmartBins:", firebaseSmartBins);
-        console.log("Firebase SingleBins:", firebaseSingleBins);
-        console.log("Firebase Alerts:", alertData);
-        
-        console.log("Firebase API responses:", { 
-          smartBinData, 
-          compartmentData, 
-          singleBinData, 
-          alertData,
-          firebaseSmartBins,
-          firebaseSingleBins,
-          combinedSmartBins,
-          combinedSingleBins
-        });
-
-        if (!isMounted) return;
-
-        setUser(effectiveUser);
-        setSmartBins(combinedSmartBins);
-        setCompartments(compartmentData);
-        setSingleBins(combinedSingleBins);
-        setAlerts(alertData);
-        
-        if (!initializedRef.current) {
-          if (effectiveUser?.smartbin_order && Array.isArray(effectiveUser.smartbin_order)) {
-            const storedOrder = effectiveUser.smartbin_order;
-            const currentBinIds = new Set(combinedSmartBins.filter(bin => bin && bin.id).map(bin => bin.id));
-            const newOrder = storedOrder.filter(id => id != null && currentBinIds.has(id));
-            combinedSmartBins.forEach(bin => {
-              if (bin && bin.id && !newOrder.includes(bin.id)) {
-                newOrder.push(bin.id);
-              }
-            });
-            setSmartBinOrder(newOrder);
-          } else if (combinedSmartBins.length > 0) {
-            setSmartBinOrder(combinedSmartBins.filter(bin => bin && bin.id).map(bin => bin.id));
+        // Use test data if enabled
+        if (TestDataService.isTestDataEnabled) {
+          console.log("🧪 Test Data Mode: Loading test data...");
+          const testData = TestDataService.generateTestData();
+          
+          if (!isMounted) return;
+          
+          setUser(effectiveUser);
+          setSmartBins(testData.smartBins);
+          setCompartments(testData.compartments);
+          setSingleBins(testData.singleBins);
+          setAlerts(testData.alerts);
+          
+          if (!initializedRef.current) {
+            if (effectiveUser?.smartbin_order && Array.isArray(effectiveUser.smartbin_order)) {
+              const storedOrder = effectiveUser.smartbin_order;
+              const currentBinIds = new Set(testData.smartBins.filter(bin => bin && bin.id).map(bin => bin.id));
+              const newOrder = storedOrder.filter(id => id != null && currentBinIds.has(id));
+              testData.smartBins.forEach(bin => {
+                if (bin && bin.id && !newOrder.includes(bin.id)) {
+                  newOrder.push(bin.id);
+                }
+              });
+              setSmartBinOrder(newOrder);
+            } else if (testData.smartBins.length > 0) {
+              setSmartBinOrder(testData.smartBins.filter(bin => bin && bin.id).map(bin => bin.id));
+            }
+            initializedRef.current = true;
           }
-          initializedRef.current = true;
+        } else {
+          // Load real data
+          const [smartBinData, compartmentData, singleBinData, alertData, firebaseSmartBins, firebaseSingleBins] = await Promise.all([
+            SmartBin.list().catch(err => {
+              console.error("SmartBin.list error:", err);
+              return [];
+            }),
+            Compartment.list().catch(err => {
+              console.error("Compartment.list error:", err);
+              return [];
+            }),
+            SingleBin.list().catch(err => {
+              console.error("SingleBin.list error:", err);
+              return [];
+            }),
+            FirebaseService.getAlerts().catch(err => {
+              console.error("FirebaseService.getAlerts error:", err);
+              return [];
+            }),
+            FirebaseService.getSmartBins().catch(err => {
+              console.error("FirebaseService.getSmartBins error:", err);
+              return [];
+            }),
+            FirebaseService.getSingleBinsWithSensorData().catch(err => {
+              console.error("FirebaseService.getSingleBinsWithSensorData error:", err);
+              return [];
+            })
+          ]);
+          
+          // Combine API data with Firebase data
+          const combinedSmartBins = [...smartBinData, ...firebaseSmartBins];
+          const combinedSingleBins = [...singleBinData, ...firebaseSingleBins];
+          
+          console.log("Firebase SmartBins:", firebaseSmartBins);
+          console.log("Firebase SingleBins:", firebaseSingleBins);
+          console.log("Firebase Alerts:", alertData);
+          
+          console.log("Firebase API responses:", { 
+            smartBinData, 
+            compartmentData, 
+            singleBinData, 
+            alertData,
+            firebaseSmartBins,
+            firebaseSingleBins,
+            combinedSmartBins,
+            combinedSingleBins
+          });
+
+          if (!isMounted) return;
+
+          setUser(effectiveUser);
+          setSmartBins(combinedSmartBins);
+          setCompartments(compartmentData);
+          setSingleBins(combinedSingleBins);
+          setAlerts(alertData);
+          
+          if (!initializedRef.current) {
+            if (effectiveUser?.smartbin_order && Array.isArray(effectiveUser.smartbin_order)) {
+              const storedOrder = effectiveUser.smartbin_order;
+              const currentBinIds = new Set(combinedSmartBins.filter(bin => bin && bin.id).map(bin => bin.id));
+              const newOrder = storedOrder.filter(id => id != null && currentBinIds.has(id));
+              combinedSmartBins.forEach(bin => {
+                if (bin && bin.id && !newOrder.includes(bin.id)) {
+                  newOrder.push(bin.id);
+                }
+              });
+              setSmartBinOrder(newOrder);
+            } else if (combinedSmartBins.length > 0) {
+              setSmartBinOrder(combinedSmartBins.filter(bin => bin && bin.id).map(bin => bin.id));
+            }
+            initializedRef.current = true;
+          }
         }
       } catch (error) {
         console.error("Error loading dashboard data:", error);
@@ -187,7 +223,7 @@ export default function Dashboard() {
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [testDataEnabled]);
 
   // Handle bin card click to show details
   const handleBinCardClick = (bin, type) => {
@@ -229,19 +265,46 @@ export default function Dashboard() {
     .filter(Boolean)
     .concat(smartBins.filter(bin => bin && bin.id && !smartBinOrder.includes(bin.id)));
 
-  const activeSmartBins = singleBins.filter(bin => bin.status === 'active');
+  // Count unique active SmartBins - ensure we only count main SmartBins, not duplicates
+  // Create a Set of unique SmartBin IDs that are active to avoid double counting
+  const uniqueActiveSmartBinIds = new Set(
+    smartBins
+      .filter(bin => bin && bin.id && bin.status === 'active')
+      .map(bin => bin.id)
+  );
+  const activeSmartBinsCount = uniqueActiveSmartBinIds.size;
+  
+  const activeSingleBins = singleBins.filter(bin => bin.status === 'active').length;
+
   const criticalAlerts = alerts.filter(alert => alert.severity === 'critical');
  
   const avgFillLevel = compartments && compartments.length > 0
   ? compartments.reduce((sum, comp) => sum + Number(comp.current_fill || 0), 0) / compartments.length
   : 0;
 
+  // Calculate total compartments (smart bin compartments + single bins)
+  const totalCompartments = compartments.length + singleBins.length;
 
   // Check if the user is on a free plan and has reached the limit
   const isFreePlan = user?.plan === 'free';
   const hasReachedSmartBinLimit = isFreePlan && smartBins.length >= MAX_FREE_BINS;
   const hasReachedSingleBinLimit = isFreePlan && singleBins.length >= MAX_FREE_BINS;
 
+  // Handle test data toggle
+  const handleTestDataToggle = () => {
+    const newState = !testDataEnabled;
+    TestDataService.toggleTestData();
+    setTestDataEnabled(newState);
+    setLoading(true);
+    
+    // Show notification
+    const message = newState 
+      ? '🧪 Test Data Mode Enabled - Showing realistic sample data' 
+      : '✅ Test Data Mode Disabled - Showing real data';
+    
+    // You can add a toast notification here if you have a toast system
+    console.log(message);
+  };
 
   if (loading) {
     return (
@@ -341,7 +404,7 @@ export default function Dashboard() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-4"
+        className="mb-4 flex items-center gap-3 flex-wrap"
       >
         <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium shadow-lg ${
           isConnectedToFirebase 
@@ -361,51 +424,22 @@ export default function Dashboard() {
           {isConnectedToFirebase ? 'Connected to IoT Network' : 'Connecting to IoT Network...'}
           {firebaseError && <span className="ml-2 text-xs">({firebaseError})</span>}
         </div>
-      </motion.div>
 
-      {/* Real-time Sensor Data Display */}
-      {realTimeData && realTimeData.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 shadow-lg"
+        {/* Test Data Toggle */}
+        <motion.button
+          onClick={handleTestDataToggle}
+          className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium shadow-lg transition-all ${
+            testDataEnabled
+              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-2 border-amber-300 dark:border-amber-600'
+              : 'bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700/50'
+          }`}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
-          <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-              className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full"
-            />
-            Latest IoT Sensor Reading
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <p className="text-sm text-blue-600 dark:text-blue-400">Distance</p>
-              <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{realTimeData[0].distance} cm</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-blue-600 dark:text-blue-400">Fill Level</p>
-              <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{realTimeData[0].fillLevel}%</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-blue-600 dark:text-blue-400">Battery</p>
-              <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{realTimeData[0].battery}%</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-blue-600 dark:text-blue-400">Status</p>
-              <p className="text-2xl font-bold text-blue-900 dark:text-blue-100 capitalize">{realTimeData[0].tilt}</p>
-            </div>
-          </div>
-          <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
-            <p className="text-xs text-blue-600 dark:text-blue-400">
-              Device: {realTimeData[0].deviceId}
-            </p>
-            <p className="text-xs text-blue-600 dark:text-blue-400">
-              Last Update: {new Date(realTimeData[0].timestamp).toLocaleString()}
-            </p>
-          </div>
-        </motion.div>
-      )}
+          <FlaskConical className={`w-4 h-4 mr-2 ${testDataEnabled ? 'animate-pulse' : ''}`} />
+          {testDataEnabled ? 'Test Data Mode ON' : 'Test Data Mode'}
+        </motion.button>
+      </motion.div>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -447,6 +481,12 @@ export default function Dashboard() {
               transition={{ delay: 0.3 }}
             >
               Monitor your smart waste management system in real-time
+              {testDataEnabled && (
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-600">
+                  <FlaskConical className="w-3 h-3 mr-1" />
+                  Test Mode
+                </span>
+              )}
             </motion.p>
           </div>
           
@@ -464,7 +504,9 @@ export default function Dashboard() {
               }}
               transition={{ duration: 2, repeat: Infinity }}
             />
-            <span className="text-gray-700 dark:text-purple-200 font-medium">System Online</span>
+            <span className="text-gray-700 dark:text-purple-200 font-medium">
+              {testDataEnabled ? 'Demo Mode' : 'System Online'}
+            </span>
           </motion.div>
         </div>
       </motion.div>
@@ -475,10 +517,11 @@ export default function Dashboard() {
         transition={{ delay: 0.5 }}
       >
         <StatsOverview 
-          activeSmartBins={activeSmartBins.length}
+          activeSmartBins={activeSmartBinsCount}
           criticalAlerts={criticalAlerts.length}
           avgFillLevel={avgFillLevel}
-          totalCompartments={compartments.length}
+          totalCompartments={totalCompartments}
+          activeSingleBins={activeSingleBins}
         />
       </motion.div>
 
@@ -667,7 +710,7 @@ export default function Dashboard() {
                         className="bg-purple-100 dark:bg-purple-800/60 text-purple-700 dark:text-purple-200 px-3 py-1 text-sm font-medium"
                       >
                         <Activity className="w-4 h-4 mr-1" />
-                        {activeSmartBins.length} Active
+                        {activeSmartBinsCount} Active
                       </Badge>
                     )}
                     <motion.div
@@ -837,7 +880,7 @@ export default function Dashboard() {
                         animate={{ opacity: [1, 0.5, 1] }}
                         transition={{ duration: 1.5, repeat: Infinity }}
                       />
-                      <span className="font-medium text-gray-900 dark:text-purple-100">{activeSmartBins.length}/{smartBins.length}</span>
+                      <span className="font-medium text-gray-900 dark:text-purple-100">{activeSmartBinsCount}/{smartBins.length}</span>
                     </div>
                   </div>
                 </CardContent>

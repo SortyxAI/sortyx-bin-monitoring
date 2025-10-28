@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { SmartBin } from "@/api/entities";
 import { Compartment } from "@/api/entities";
@@ -33,6 +32,8 @@ import SingleBinCard from "../components/singlebins/SingleBinCard";
 import BinDetailsModal from "../components/modals/BinDetailsModal";
 import AddBinModal from "../components/modals/AddBinModal";
 import ImprovedAddBinModal from "../components/modals/ImprovedAddBinModal";
+import CompartmentManagementModal from "../components/modals/CompartmentManagementModal";
+import MultiCompartmentSmartBinModal from "../components/modals/MultiCompartmentSmartBinModal";
 
 export default function SmartBins() {
   // Existing SmartBin states
@@ -63,6 +64,15 @@ export default function SmartBins() {
   // Add Bin Modal states
   const [isAddSmartBinModalOpen, setIsAddSmartBinModalOpen] = useState(false);
   const [isAddSingleBinModalOpen, setIsAddSingleBinModalOpen] = useState(false);
+  
+  // Edit Bin Modal states (for updates)
+  const [isEditSmartBinModalOpen, setIsEditSmartBinModalOpen] = useState(false);
+  const [isEditSingleBinModalOpen, setIsEditSingleBinModalOpen] = useState(false);
+  const [binToEdit, setBinToEdit] = useState(null);
+  
+  // Compartment Management Modal state
+  const [isCompartmentModalOpen, setIsCompartmentModalOpen] = useState(false);
+  const [smartBinForCompartments, setSmartBinForCompartments] = useState(null);
 
   // Refs for scrolling to forms
   const binFormRef = useRef(null);
@@ -220,17 +230,23 @@ export default function SmartBins() {
 
   const handleSaveSingleBin = async (singleBinData) => {
     try {
-      if (editingSingleBin) {
-        await SingleBin.update(editingSingleBin.id, singleBinData);
-      } else {
-        await SingleBin.create(singleBinData);
-      }
+      console.log('Saving single bin:', singleBinData);
+      
+      // Save to Firestore
+      const savedSingleBin = await FirebaseService.saveSingleBin(singleBinData);
+      console.log('SingleBin saved successfully:', savedSingleBin);
+      
+      // Show success message
+      alert(`SingleBin "${singleBinData.name}" ${editingSingleBin ? 'updated' : 'added'} successfully!\n\nSensors enabled: ${Object.keys(singleBinData.sensors_enabled || {}).filter(k => singleBinData.sensors_enabled[k]).join(', ')}`);
+      
+      // Reset form and reload data
       setShowSingleBinForm(false);
       setEditingSingleBin(null);
       await loadData();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       console.error("Error saving SingleBin:", error);
+      alert(`Failed to save single bin: ${error.message}`);
     }
   };
 
@@ -342,6 +358,53 @@ export default function SmartBins() {
     }
   };
 
+  // Handle updating existing bin from modal
+  const handleUpdateBin = async (binData) => {
+    try {
+      console.log('Updating bin:', binData);
+      
+      // Update Firebase based on bin type
+      let updatedBin;
+      if (binData.type === 'smart' || binData.type === 'smartbin') {
+        updatedBin = await FirebaseService.saveSmartBin({ ...binData, id: binToEdit.id });
+        console.log('Smart bin updated:', updatedBin);
+      } else {
+        updatedBin = await FirebaseService.saveSingleBin({ ...binData, id: binToEdit.id });
+        console.log('Single bin updated:', updatedBin);
+      }
+      
+      // Show success message
+      const binTypeName = (binData.type === 'smart' || binData.type === 'smartbin') ? 'Smart Bin' : 'Single Bin';
+      alert(`${binTypeName} "${binData.name}" updated successfully!`);
+      
+      // Reload the data
+      await loadData();
+      
+    } catch (error) {
+      console.error('Error updating bin:', error);
+      alert(`Failed to update bin: ${error.message}`);
+      throw error;
+    }
+  };
+
+  // Open edit modal for SmartBin
+  const handleEditSmartBin = (smartBin) => {
+    setBinToEdit(smartBin);
+    setIsEditSmartBinModalOpen(true);
+  };
+
+  // Open edit modal for SingleBin
+  const handleEditSingleBin = (singleBin) => {
+    setBinToEdit(singleBin);
+    setIsEditSingleBinModalOpen(true);
+  };
+
+  // Open compartment management modal
+  const handleManageCompartments = (smartBin) => {
+    setSmartBinForCompartments(smartBin);
+    setIsCompartmentModalOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -387,7 +450,10 @@ export default function SmartBins() {
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              setIsAddSingleBinModalOpen(true);
+              setEditingSingleBin(null);
+              setShowSingleBinForm(true);
+              setShowBinForm(false);
+              setShowCompartmentForm(false);
             }}
             className="bg-indigo-600 hover:bg-indigo-700"
           >
@@ -596,7 +662,8 @@ export default function SmartBins() {
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              setIsAddSmartBinModalOpen(true);
+              setIsEditSmartBinModalOpen(true);
+              setBinToEdit(null);
             }}
             className="bg-purple-600 hover:bg-purple-700  max-[400px]:px-2 max-[400px]:py-1"
           >
@@ -667,18 +734,16 @@ export default function SmartBins() {
                     <p className="text-gray-500 dark:text-gray-300 mb-4 text-center">
                       Create your first SmartBin to start monitoring your waste management system
                     </p>
-                    {/* <Button
+                    <Button
                       onClick={() => {
-                        setEditingBin(null);
-                        setShowBinForm(true);
-                        setShowCompartmentForm(false);
-                        setShowSingleBinForm(false);
+                        setIsEditSmartBinModalOpen(true);
+                        setBinToEdit(null);
                       }}
                       className="bg-purple-600 hover:bg-purple-700"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Create SmartBin
-                    </Button> */}
+                    </Button>
                   </CardContent>
                 </Card>
               ) : (
@@ -756,6 +821,16 @@ export default function SmartBins() {
                                   >
                                     <Plus className="w-4 h-4 mr-2" />
                                     Add Compartment
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleManageCompartments(smartBin);
+                                    }}
+                                    className="dark:text-gray-200 dark:hover:bg-purple-500/20"
+                                  >
+                                    <Settings className="w-4 h-4 mr-2" />
+                                    Manage Compartments
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={(e) => {
@@ -897,6 +972,58 @@ export default function SmartBins() {
         onClose={() => setIsAddSingleBinModalOpen(false)}
         onAddBin={handleAddBin}
         binType="single"
+      />
+
+      {/* Edit SmartBin Modal - Now uses Multi-Compartment Modal */}
+      <MultiCompartmentSmartBinModal
+        isOpen={isEditSmartBinModalOpen}
+        onClose={() => {
+          setIsEditSmartBinModalOpen(false);
+          setBinToEdit(null);
+        }}
+        onSave={async (smartBinData) => {
+          try {
+            // Save the SmartBin with all compartments
+            await FirebaseService.saveSmartBin(smartBinData);
+            
+            // Show success message
+            alert(`SmartBin "${smartBinData.name}" ${binToEdit ? 'updated' : 'created'} successfully with ${smartBinData.compartments?.length || 0} compartments!`);
+            
+            // Reload data and close modal
+            await loadData();
+            setIsEditSmartBinModalOpen(false);
+            setBinToEdit(null);
+          } catch (error) {
+            console.error('Error saving SmartBin:', error);
+            alert(`Failed to save SmartBin: ${error.message}`);
+          }
+        }}
+        existingSmartBin={binToEdit}
+      />
+
+      {/* Edit SingleBin Modal */}
+      <ImprovedAddBinModal
+        isOpen={isEditSingleBinModalOpen}
+        onClose={() => {
+          setIsEditSingleBinModalOpen(false);
+          setBinToEdit(null);
+        }}
+        onAddBin={handleUpdateBin}
+        binType="single"
+        existingBin={binToEdit}
+      />
+
+      {/* Compartment Management Modal */}
+      <CompartmentManagementModal
+        isOpen={isCompartmentModalOpen}
+        onClose={() => {
+          setIsCompartmentModalOpen(false);
+          setSmartBinForCompartments(null);
+        }}
+        smartBin={smartBinForCompartments}
+        onSave={async () => {
+          await loadData();
+        }}
       />
     </div>
   );

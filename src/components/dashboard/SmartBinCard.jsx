@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +25,7 @@ import {
   DoorOpen
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { createPageUrl } from "@/utils";
+import { createPageUrl, calculateFillLevel } from "@/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import {
     DropdownMenu,
@@ -35,8 +34,13 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const CompartmentPieChart = ({ compartment }) => {
-  const fillLevel = compartment.current_fill || 0;
+// Reusable Pie Chart Component for Compartments (Smaller for Multi-Compartment)
+const CompartmentPieChart = ({ compartment, size = "small" }) => {
+  const fillLevel = calculateFillLevel(
+    compartment.sensorValue || compartment.sensor_value,
+    compartment.binHeight || compartment.bin_height
+  );
+  
   const data = [
     { 
       name: 'Filled', 
@@ -50,16 +54,18 @@ const CompartmentPieChart = ({ compartment }) => {
     }
   ];
 
+  const dimensions = size === "small" ? { w: 16, h: 16, inner: 20, outer: 28 } : { w: 24, h: 24, inner: 30, outer: 42 };
+
   return (
-    <div className="relative w-20 h-20">
+    <div className={`relative ${size === "small" ? "w-16 h-16" : "w-24 h-24"}`}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
             data={data}
             cx="50%"
             cy="50%"
-            innerRadius={25}
-            outerRadius={35}
+            innerRadius={dimensions.inner}
+            outerRadius={dimensions.outer}
             startAngle={90}
             endAngle={-270}
             dataKey="value"
@@ -71,7 +77,7 @@ const CompartmentPieChart = ({ compartment }) => {
         </PieChart>
       </ResponsiveContainer>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+        <span className={`${size === "small" ? "text-xs" : "text-lg"} font-bold text-gray-700 dark:text-gray-200`}>
           {fillLevel}%
         </span>
       </div>
@@ -79,109 +85,372 @@ const CompartmentPieChart = ({ compartment }) => {
   );
 };
 
-const IndividualCompartmentSensors = ({ compartment }) => {
-  const sensorData = [];
+// Individual Compartment Card matching SingleBinDashboardCard design
+const IndividualCompartmentCard = ({ compartment, index }) => {
+  const fillPercentage = calculateFillLevel(
+    compartment.sensorValue || compartment.sensor_value,
+    compartment.binHeight || compartment.bin_height
+  );
   
-  if (compartment.sensors_enabled?.fill_level && compartment.current_fill !== undefined) {
-    sensorData.push({
-      type: 'fill_level',
-      value: compartment.current_fill,
+  const isOverThreshold = fillPercentage >= (compartment.fill_threshold || 90);
+  const deviceId = compartment.deviceId || compartment.device_id || compartment.iot_device_id || null;
+
+  const binTypeColors = {
+    recyclable: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    general_waste: 'bg-gray-100 text-gray-700 dark:bg-gray-600/40 dark:text-gray-300',
+    compost: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    organic: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    hazardous: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    singlebin: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+    mixed: 'bg-gray-100 text-gray-700 dark:bg-gray-600/40 dark:text-gray-300'
+  };
+
+  // Collect compartment sensor data - excluding fill level
+  const compartmentSensorData = [];
+  
+  // Battery sensor - ALWAYS show, default to 0% if offline or no data
+  if (compartment.sensors_enabled?.battery_level) {
+    const isOnline = compartment.status === 'active' && 
+                     compartment.last_sensor_update && 
+                     (Date.now() - new Date(compartment.last_sensor_update).getTime()) < 60000;
+    
+    const batteryValue = (isOnline && compartment.battery_level !== undefined) 
+      ? compartment.battery_level 
+      : 0;
+    
+    compartmentSensorData.push({
+      type: 'battery',
+      label: 'Battery',
+      value: batteryValue,
       unit: '%',
-      icon: BarChart3,
-      color: compartment.current_fill > 90 ? 'text-red-500' : compartment.current_fill > 70 ? 'text-yellow-500' : 'text-green-500'
+      icon: Battery,
+      color: batteryValue < 20 ? 'text-red-500' : batteryValue < 50 ? 'text-yellow-500' : 'text-green-500',
+      bgColor: batteryValue < 20 ? 'from-red-500 to-red-600' : batteryValue < 50 ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600',
+      isOffline: !isOnline
+    });
+  }
+
+  if (compartment.sensors_enabled?.temperature && compartment.temperature !== undefined) {
+    compartmentSensorData.push({
+      type: 'temperature',
+      label: 'Temperature',
+      value: compartment.temperature,
+      unit: '°C',
+      icon: Thermometer,
+      color: compartment.temperature > (compartment.temp_threshold || 50) ? 'text-red-500' : 'text-blue-500',
+      bgColor: compartment.temperature > (compartment.temp_threshold || 50) ? 'from-red-500 to-red-600' : 'from-blue-500 to-blue-600'
     });
   }
   
+  if (compartment.sensors_enabled?.humidity && compartment.humidity !== undefined) {
+    compartmentSensorData.push({
+      type: 'humidity',
+      label: 'Humidity',
+      value: compartment.humidity,
+      unit: '%',
+      icon: Droplets,
+      color: 'text-blue-400',
+      bgColor: 'from-blue-400 to-blue-500'
+    });
+  }
+  
+  if (compartment.sensors_enabled?.air_quality && compartment.air_quality !== undefined) {
+    compartmentSensorData.push({
+      type: 'air_quality',
+      label: 'Air Quality',
+      value: compartment.air_quality,
+      unit: ' AQI',
+      icon: Wind,
+      color: compartment.air_quality > 150 ? 'text-red-500' : compartment.air_quality > 100 ? 'text-yellow-500' : 'text-green-500',
+      bgColor: compartment.air_quality > 150 ? 'from-red-500 to-red-600' : compartment.air_quality > 100 ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600'
+    });
+  }
+
+  if (compartment.sensors_enabled?.odour_detection && compartment.odour_level !== undefined) {
+    compartmentSensorData.push({
+      type: 'odour',
+      label: 'Odour Level',
+      value: compartment.odour_level,
+      unit: '%',
+      icon: Scan,
+      color: compartment.odour_level > 70 ? 'text-red-500' : 'text-green-500',
+      bgColor: compartment.odour_level > 70 ? 'from-red-500 to-red-600' : 'from-green-500 to-green-600'
+    });
+  }
+
   if (compartment.sensors_enabled?.weight && compartment.weight !== undefined) {
-    sensorData.push({
+    compartmentSensorData.push({
       type: 'weight',
+      label: 'Weight',
       value: compartment.weight,
       unit: 'kg',
       icon: Weight,
-      color: 'text-purple-500'
+      color: 'text-purple-500',
+      bgColor: 'from-purple-500 to-purple-600'
     });
   }
-  
-  if (compartment.sensors_enabled?.odour_detection && compartment.odour_level !== undefined) {
-    sensorData.push({
-      type: 'odour',
-      value: compartment.odour_level,
-      unit: '',
-      icon: Scan,
-      color: compartment.odour_level > 70 ? 'text-red-500' : 'text-green-500'
-    });
-  }
-  
+
   if (compartment.sensors_enabled?.lid_sensor && compartment.lid_open !== undefined) {
-    sensorData.push({
+    compartmentSensorData.push({
       type: 'lid_status',
+      label: 'Lid Status',
       value: compartment.lid_open ? 'Open' : 'Closed',
       unit: '',
       icon: DoorOpen,
-      color: compartment.lid_open ? 'text-orange-500' : 'text-green-500'
+      color: compartment.lid_open ? 'text-orange-500' : 'text-green-500',
+      bgColor: compartment.lid_open ? 'from-orange-500 to-orange-600' : 'from-green-500 to-green-600'
     });
   }
 
-  if (sensorData.length === 0) {
-    return (
-      <div className="mt-3 text-center py-2 text-gray-400 dark:text-gray-500 bg-amber-50/50 dark:bg-amber-900/10 rounded text-xs border border-amber-200/50 dark:border-amber-700/30">
-        <Zap className="w-3 h-3 mx-auto mb-1 opacity-50" />
-        <p>No sensors enabled</p>
-      </div>
-    );
-  }
+  const isLiveActive = compartment.last_sensor_update && 
+    (Date.now() - new Date(compartment.last_sensor_update).getTime()) < 60000;
 
   return (
-    <div className="mt-3 p-3 rounded-lg bg-gradient-to-br from-amber-100/60 to-orange-100/60 dark:from-amber-900/30 dark:to-orange-900/30 border-2 border-amber-300/50 dark:border-amber-700/40 shadow-inner">
-      <div className="flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300 border-b border-amber-400/50 dark:border-amber-600/50 pb-2 mb-2">
-        <motion.div
-          animate={{
-            scale: [1, 1.3, 1],
-            rotate: [0, 15, -15, 0]
-          }}
-          transition={{
-            duration: 2,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        >
-          <Wifi className="w-3 h-3" />
-        </motion.div>
-        <span>Compartment Sensors</span>
-        <motion.div
-          className="w-1 h-1 bg-amber-600 dark:bg-amber-400 rounded-full ml-1"
-          animate={{
-            scale: [1, 1.5, 1],
-            opacity: [1, 0.5, 1]
-          }}
-          transition={{
-            duration: 1.5,
-            repeat: Infinity
-          }}
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        {sensorData.map((sensor, index) => (
-          <motion.div
-            key={sensor.type}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: index * 0.05 }}
-            className="bg-white/80 dark:bg-gradient-to-br dark:from-amber-800/40 dark:to-orange-800/40 rounded-md p-2 border border-amber-200 dark:border-amber-600/30 shadow-sm"
-          >
-            <div className="flex items-center gap-1 mb-1">
-              <sensor.icon className={`w-3 h-3 ${sensor.color}`} />
-              <span className="text-xs text-gray-600 dark:text-gray-200 uppercase tracking-wide">
-                {sensor.type.replace('_', ' ')}
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.1 }}
+    >
+      <Card 
+        className={`overflow-hidden transition-all duration-300 bg-gradient-to-br from-white via-white to-indigo-50/30 dark:from-[#2A1F3D] dark:via-[#241B3A] dark:to-[#1F0F2E] backdrop-blur-sm border-2 shadow-lg hover:shadow-xl hover:scale-[1.02] ${
+          isOverThreshold 
+            ? 'border-red-500 dark:border-red-400 shadow-red-500/20 dark:shadow-red-400/30' 
+            : 'border-indigo-200 dark:border-indigo-700'
+        }`}
+      >
+        <CardContent className="p-4">
+          {/* Layer 1: Compartment Header */}
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <h4 className="font-semibold text-base text-gray-900 dark:text-white">
+                {compartment.label || compartment.name}
+              </h4>
+              {isOverThreshold && (
+                <motion.div
+                  animate={{ 
+                    scale: [1, 1.2, 1],
+                    rotate: [0, 10, -10, 0]
+                  }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                >
+                  <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                </motion.div>
+              )}
+            </div>
+          </div>
+
+          {/* Layer 2: Compartment Information */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-2.5 mb-2.5 border border-blue-200 dark:border-blue-700">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
+                Compartment Info
               </span>
+              {compartment.compartment_name && (
+                <Badge className="bg-blue-600 text-white text-[9px] px-1.5 py-0 font-mono">
+                  {compartment.compartment_name}
+                </Badge>
+              )}
             </div>
-            <div className="text-sm font-bold text-gray-900 dark:text-white">
-              {sensor.value}{sensor.unit}
+            
+            {/* Height and Bin Type */}
+            <div className="grid grid-cols-2 gap-1.5 mb-2">
+              {(compartment.binHeight || compartment.bin_height) && (
+                <div className="bg-white/70 dark:bg-indigo-900/40 rounded px-1.5 py-1 border border-blue-300 dark:border-blue-600">
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <BarChart3 className="w-2.5 h-2.5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-[9px] font-medium text-gray-600 dark:text-gray-300">Height</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300">{compartment.binHeight || compartment.bin_height} cm</span>
+                </div>
+              )}
+              <div className="bg-white/70 dark:bg-indigo-900/40 rounded px-1.5 py-1 border border-blue-300 dark:border-blue-600">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className="text-[9px] font-medium text-gray-600 dark:text-gray-300">Type</span>
+                </div>
+                <Badge className={`${binTypeColors[compartment.bin_type || compartment.type || 'mixed']} text-[9px] px-1`}>
+                  {(compartment.bin_type || compartment.type || 'mixed').replace('_', ' ')}
+                </Badge>
+              </div>
             </div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
+            
+            {/* Device ID */}
+            {deviceId && (
+              <div className="bg-white/70 dark:bg-indigo-900/40 rounded px-1.5 py-1 border border-blue-300 dark:border-blue-600 mb-2">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <Wifi className="w-2.5 h-2.5 text-blue-600 dark:text-blue-400" />
+                  <span className="text-[9px] font-medium text-gray-600 dark:text-gray-300">Device ID</span>
+                </div>
+                <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300 block break-all">{deviceId}</span>
+              </div>
+            )}
+            
+            {/* Status Badge */}
+            <Badge className={`${
+              compartment.status === 'active' 
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                : 'bg-gray-100 text-gray-700 dark:bg-gray-600/40 dark:text-gray-300'
+            } text-[9px]`}>
+              {compartment.status === 'active' ? '● Active' : '○ Suspended'}
+            </Badge>
+          </div>
+
+          {/* Layer 3: Fill Level Section */}
+          <div className="bg-gradient-to-r from-slate-50 to-indigo-50 dark:from-purple-900/50 dark:to-indigo-900/50 rounded-lg p-3 mb-3 border border-indigo-200 dark:border-indigo-700">
+            <div className="flex items-center gap-3 mb-2">
+              <CompartmentPieChart compartment={compartment} size="small" />
+              <div className="flex-1">
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-gray-600 dark:text-gray-300 font-medium">Fill Level</span>
+                  <span className={`font-bold ${
+                    fillPercentage > 90 ? 'text-red-600 dark:text-red-400' :
+                    fillPercentage > 70 ? 'text-yellow-600 dark:text-yellow-400' :
+                    'text-green-600 dark:text-green-400'
+                  }`}>
+                    {fillPercentage}%
+                  </span>
+                </div>
+                <div className="h-2 bg-gray-200 dark:bg-indigo-900/60 rounded-full overflow-hidden shadow-inner">
+                  <motion.div
+                    className={`h-full rounded-full ${
+                      fillPercentage > 90 ? 'bg-gradient-to-r from-red-500 to-red-600' :
+                      fillPercentage > 70 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
+                      'bg-gradient-to-r from-green-500 to-green-600'
+                    }`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${fillPercentage}%` }}
+                    transition={{ duration: 0.8 }}
+                  />
+                </div>
+              </div>
+            </div>
+            {/* Capacity and Alert Threshold */}
+            <div className="flex items-center justify-between text-[10px] bg-white/60 dark:bg-indigo-900/40 rounded-lg px-2 py-1.5 border border-indigo-200 dark:border-indigo-700">
+              <div className="flex items-center gap-2">
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Capacity:</span>
+                  <span className="ml-1 font-semibold text-gray-700 dark:text-gray-200">{compartment.capacity || 100}L</span>
+                </div>
+                <div className="h-3 w-px bg-gray-300 dark:bg-gray-600"></div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Alert:</span>
+                  <span className="ml-1 font-semibold text-orange-600 dark:text-orange-400">{compartment.fill_threshold || 80}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Layer 4: Compartment Sensor Section */}
+          {compartmentSensorData.length > 0 && (
+            <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-900/20 dark:via-teal-900/20 dark:to-cyan-900/20 rounded-lg p-3 border-2 border-emerald-200 dark:border-emerald-700/50 shadow-inner">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-6 h-6 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-md flex items-center justify-center shadow-md">
+                    <Activity className="w-3 h-3 text-white" />
+                  </div>
+                  <div>
+                    <h5 className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                      Sensors
+                    </h5>
+                  </div>
+                </div>
+                <motion.div
+                  className="flex items-center gap-1"
+                  animate={isLiveActive ? {
+                    scale: [1, 1.1, 1],
+                    opacity: [1, 0.7, 1]
+                  } : {}}
+                  transition={isLiveActive ? {
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  } : {}}
+                >
+                  <Wifi className={`w-2.5 h-2.5 ${isLiveActive ? 'text-green-500' : 'text-gray-400'}`} />
+                  <Badge 
+                    className={`text-[8px] px-1 py-0 ${
+                      isLiveActive 
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' 
+                        : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                    }`}
+                  >
+                    {isLiveActive ? 'LIVE' : 'OFFLINE'}
+                  </Badge>
+                </motion.div>
+              </div>
+
+              {/* Sensor Grid */}
+              <div className={`grid ${compartmentSensorData.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
+                {compartmentSensorData.map((sensor, sensorIndex) => (
+                  <motion.div
+                    key={sensor.type}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: sensorIndex * 0.05 }}
+                    className="bg-white/90 dark:bg-emerald-800/30 rounded-md p-2 border border-emerald-200 dark:border-emerald-600/40 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1">
+                        <div className={`w-5 h-5 rounded-sm bg-gradient-to-br ${sensor.bgColor}/10 flex items-center justify-center`}>
+                          <sensor.icon className={`w-2.5 h-2.5 ${sensor.color}`} />
+                        </div>
+                        <span className="text-[9px] font-medium text-gray-700 dark:text-gray-200">
+                          {sensor.label}
+                        </span>
+                      </div>
+                      {sensor.type === 'battery' && sensor.isOffline && (
+                        <Badge className="bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 text-[8px] px-1 py-0">
+                          Offline
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-sm font-bold text-gray-900 dark:text-white">
+                          {sensor.value}{sensor.unit}
+                        </span>
+                      </div>
+                      
+                      {/* Progress bar for percentage-based sensors */}
+                      {(sensor.type === 'battery' || sensor.type === 'humidity' || sensor.type === 'odour') && (
+                        <div className="h-1.5 bg-gray-200 dark:bg-emerald-900/60 rounded-full overflow-hidden shadow-inner">
+                          <motion.div
+                            className={`h-full rounded-full bg-gradient-to-r ${sensor.bgColor}`}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${sensor.value}%` }}
+                            transition={{ duration: 0.8, delay: sensorIndex * 0.05 }}
+                          />
+                        </div>
+                      )}
+                      
+                      {sensor.type === 'battery' && sensor.value < 20 && (
+                        <motion.p 
+                          className="text-[9px] text-red-600 dark:text-red-400 mt-0.5 flex items-center gap-0.5"
+                          animate={{ opacity: [1, 0.5, 1] }}
+                          transition={{ duration: 1.5, repeat: Infinity }}
+                        >
+                          <AlertTriangle className="w-2 h-2" />
+                          Low
+                        </motion.p>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Timestamp */}
+              {compartment.last_sensor_update && (
+                <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-700/40">
+                  <p className="text-[9px] text-gray-500 dark:text-gray-400 text-center">
+                    Updated: {new Date(compartment.last_sensor_update).toLocaleString()}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 };
 
@@ -488,59 +757,11 @@ export default function SmartBinCard({ smartBin, compartments = [], alerts = [],
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {compartments.map((compartment, index) => (
-                        <motion.div
-                          key={compartment.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          className="bg-gradient-to-br from-slate-50 to-indigo-50 dark:from-purple-900/50 dark:to-purple-800/70 rounded-xl p-4 border-2 border-indigo-200 dark:border-purple-600/50 shadow-lg hover:shadow-xl transition-all duration-300"
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <h5 className="font-semibold text-gray-900 dark:text-purple-100 text-base">
-                              {compartment.label}
-                            </h5>
-                            <Badge variant="outline" className="text-xs dark:border-purple-400 dark:text-purple-200 bg-purple-50 dark:bg-purple-800/60">
-                              {compartment.bin_type.replace('_', ' ')}
-                            </Badge>
-                          </div>
-                          
-                          <div className="flex items-center gap-4 mb-4">
-                            <CompartmentPieChart compartment={compartment} />
-                            <div className="flex-1">
-                              <div className="flex justify-between text-sm mb-2">
-                                <span className="text-gray-600 dark:text-purple-200 font-medium">Fill Level</span>
-                                <span className={`font-bold ${
-                                  (compartment.current_fill || 0) > 90 ? 'text-red-600 dark:text-red-400' :
-                                  (compartment.current_fill || 0) > 70 ? 'text-yellow-600 dark:text-yellow-400' :
-                                  'text-green-600 dark:text-green-400'
-                                }`}>
-                                  {compartment.current_fill || 0}%
-                                </span>
-                              </div>
-                              <div className="h-3 bg-gray-200 dark:bg-purple-900/60 rounded-full overflow-hidden shadow-inner">
-                                <motion.div
-                                  className={`h-full rounded-full ${
-                                    (compartment.current_fill || 0) > 90 ? 'bg-gradient-to-r from-red-500 to-red-600' :
-                                    (compartment.current_fill || 0) > 70 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
-                                    'bg-gradient-to-r from-green-500 to-green-600'
-                                  }`}
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${compartment.current_fill || 0}%` }}
-                                  transition={{ duration: 0.8, delay: index * 0.1 }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="text-sm text-gray-500 dark:text-purple-200 bg-gray-50/50 dark:bg-purple-900/40 rounded-lg p-2 mb-3">
-                            <div className="flex justify-between">
-                              <span>Capacity: {compartment.capacity}L</span>
-                              <span>Alert: {compartment.fill_threshold}%</span>
-                            </div>
-                          </div>
-
-                          <IndividualCompartmentSensors compartment={compartment} />
-                        </motion.div>
+                        <IndividualCompartmentCard 
+                          key={compartment.id} 
+                          compartment={compartment} 
+                          index={index}
+                        />
                       ))}
                     </div>
                   )}

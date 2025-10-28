@@ -9,12 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FirebaseService } from '@/services/firebaseService';
-import { onValue, ref } from 'firebase/database';
-import { database, auth } from '@/config/firebase';
-import { SmartBin, User } from '@/api/entities'
+import { SmartBin, User } from '@/api/entities';
 
-
-const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) => {
+const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single', existingBin = null }) => {
   // Step 1: Basic Details
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -42,6 +39,53 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
   const [selectedDeviceData, setSelectedDeviceData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingDevices, setLoadingDevices] = useState(false);
+  const [userAppId, setUserAppId] = useState(null);
+
+  // Load existing bin data when modal opens in edit mode
+  useEffect(() => {
+    if (isOpen && existingBin) {
+      console.log('Loading existing bin data:', existingBin);
+      setFormData({
+        name: existingBin.name || '',
+        location: existingBin.location || '',
+        deviceId: existingBin.deviceId || existingBin.device_id || '',
+        capacity: existingBin.capacity || 100,
+        binHeight: existingBin.binHeight || 100,
+        bin_type: existingBin.bin_type || 'general_waste',
+        description: existingBin.description || '',
+        status: existingBin.status || 'active'
+      });
+      setSensorsEnabled(existingBin.sensors_enabled || {
+        fill_level: false,
+        battery_level: false,
+        temperature: false,
+        humidity: false,
+        air_quality: false,
+        odour_detection: false
+      });
+    } else if (isOpen && !existingBin) {
+      // Reset form for new bin
+      setFormData({
+        name: '',
+        location: '',
+        deviceId: '',
+        capacity: 100,
+        binHeight: 100,
+        bin_type: 'general_waste',
+        description: '',
+        status: 'active'
+      });
+      setSensorsEnabled({
+        fill_level: false,
+        battery_level: false,
+        temperature: false,
+        humidity: false,
+        air_quality: false,
+        odour_detection: false
+      });
+      setStep(1);
+    }
+  }, [isOpen, existingBin]);
 
   // Load available IoT devices
   useEffect(() => {
@@ -60,27 +104,60 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
   const loadAvailableDevices = async () => {
     try {
       setLoadingDevices(true);
-      const devices = [
-        { deviceId: 'sortyx-sensor-two', status: 'online' },
-        { deviceId: 'plaese-work', status: 'online' },
-        { deviceId: 'sortyx-sensor-one', status: 'online' }
-      ];
+      
+      // Get current user and their App ID
+      const currentUser = await User.me();
+      console.log('📍 Current user:', currentUser);
+      
+      // Check if admin is impersonating another user
+      const impersonatedUserStr = localStorage.getItem('impersonatedUser');
+      const effectiveUser = impersonatedUserStr ? JSON.parse(impersonatedUserStr) : currentUser;
+      
+      // Get user's Application ID - use 'sortyx-iot' as default if not found
+      const appId = effectiveUser.applicationId || effectiveUser.app_id || effectiveUser.appId || 'sortyx-iot';
+      console.log('🔍 Using Application ID for device filtering:', appId);
+      setUserAppId(appId);
+      
+      // Load devices filtered by Application ID from Firestore
+      console.log('📡 Querying Firestore iot-devices collection with applicationId:', appId);
+      const devices = await FirebaseService.getAvailableDevices(appId);
+      console.log('📦 Available devices returned:', devices);
 
-      // Get latest data for each device
+      if (!devices || devices.length === 0) {
+        console.warn('⚠️ No IoT devices found for Application ID:', appId);
+        console.warn('💡 Please ensure:');
+        console.warn('   1. Firestore has an "iot-devices" collection');
+        console.warn('   2. Documents in that collection have an "applicationId" field set to:', appId);
+        console.warn('   3. Documents have a "deviceId" field with the device identifier');
+        setAvailableDevices([]);
+        setLoadingDevices(false);
+        return;
+      }
+
+      console.log('✅ Found', devices.length, 'devices for Application ID:', appId);
+
+      // Get latest sensor data for each device
       for (const device of devices) {
         try {
           const latestData = await FirebaseService.getLatestSensorData(device.deviceId);
           if (latestData) {
             device.sampleData = latestData;
+            device.status = 'online';
+            console.log('✅ Device', device.deviceId, 'is online with data');
+          } else {
+            device.status = 'offline';
+            console.log('⚠️ Device', device.deviceId, 'has no sensor data (offline)');
           }
         } catch (error) {
-          console.log(`No data found for device ${device.deviceId}`);
+          console.log(`⚠️ No data found for device ${device.deviceId}:`, error.message);
+          device.status = 'offline';
         }
       }
 
-      setAvailableDevices(devices);
+      setAvailableDevices(devices || []);
     } catch (error) {
-      console.error('Error loading devices:', error);
+      console.error('❌ Error loading devices:', error);
+      setAvailableDevices([]);
     } finally {
       setLoadingDevices(false);
     }
@@ -107,31 +184,6 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
     }
   };
 
-  useEffect(() => {
-         
-   async function fetchBins(){
-    try{
-      const user = User.me();
-      console.log("Current User: ", user);
-      if(user?.applicationId){
-        const binsData = await SmartBin.filter({
-          applicationId : (await user).applicationId,
-        });
-        console.log("Bins Data User ", binsData);
-        setAvailableDevices(binsData);
-      }
-      else{
-        console.warn("User doesn't have an ApplicationId ")
-      }
-    }catch(error){
-      console.error("Error fetching bins", error);
-    }
-   }
-
-   fetchBins();
-    
-  }, []);
-
   const calculateFillLevel = (distance, binHeight) => {
     if (!distance || !binHeight) return 0;
     const fillLevel = ((binHeight - distance) / binHeight) * 100;
@@ -146,9 +198,9 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
 
     setLoading(true);
     try {
-      const fillLevel = selectedDeviceData ? calculateFillLevel(selectedDeviceData.distance, formData.binHeight) : 0;
+      const fillLevel = selectedDeviceData ? calculateFillLevel(selectedDeviceData.distance, formData.binHeight) : existingBin?.current_fill || 0;
       
-      const newBin = {
+      const binData = {
         // Basic Details
         name: formData.name,
         location: formData.location,
@@ -167,29 +219,36 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
         // Current Sensor Data
         current_fill: fillLevel,
         fillLevel: fillLevel,
-        battery_level: selectedDeviceData?.battery || 0,
-        battery: selectedDeviceData?.battery || 0,
-        distance: selectedDeviceData?.distance || 0,
-        temperature: selectedDeviceData?.temperature || 0,
-        humidity: selectedDeviceData?.humidity || 0,
-        air_quality: selectedDeviceData?.airQuality || 0,
-        odour_level: selectedDeviceData?.odourLevel || 0,
+        battery_level: selectedDeviceData?.battery || existingBin?.battery_level || 0,
+        battery: selectedDeviceData?.battery || existingBin?.battery || 0,
+        distance: selectedDeviceData?.distance || existingBin?.distance || 0,
+        temperature: selectedDeviceData?.temperature || existingBin?.temperature || 0,
+        humidity: selectedDeviceData?.humidity || existingBin?.humidity || 0,
+        air_quality: selectedDeviceData?.airQuality || existingBin?.air_quality || 0,
+        odour_level: selectedDeviceData?.odourLevel || existingBin?.odour_level || 0,
         
-        current_sensor_data: selectedDeviceData || {},
+        current_sensor_data: selectedDeviceData || existingBin?.current_sensor_data || {},
         last_sensor_update: new Date().toISOString(),
         lastUpdate: new Date().toISOString(),
         
         // Thresholds
-        fill_threshold: 80,
-        battery_threshold: 20,
-        temp_threshold: 50,
+        fill_threshold: existingBin?.fill_threshold || 80,
+        battery_threshold: existingBin?.battery_threshold || 20,
+        temp_threshold: existingBin?.temp_threshold || 50,
         
         // Metadata
-        created_date: new Date().toISOString(),
-        created_by: 'admin@sortyx.com'
+        ...(existingBin ? {
+          id: existingBin.id,
+          created_date: existingBin.created_date,
+          created_by: existingBin.created_by,
+          updated_date: new Date().toISOString()
+        } : {
+          created_date: new Date().toISOString(),
+          created_by: 'admin@sortyx.com'
+        })
       };
 
-      await onAddBin(newBin);
+      await onAddBin(binData);
       
       // Reset form
       setFormData({
@@ -214,8 +273,8 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
       setStep(1);
       onClose();
     } catch (error) {
-      console.error('Error adding bin:', error);
-      alert('Failed to add bin. Please try again.');
+      console.error('Error saving bin:', error);
+      alert('Failed to save bin. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -300,7 +359,7 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
           <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-white">
-                Add {binType === 'single' ? 'Single Bin' : 'Smart Bin'}
+                {existingBin ? 'Edit' : 'Add'} {binType === 'single' ? 'Single Bin' : 'Smart Bin'}
               </h2>
               <p className="text-purple-100 text-sm">
                 {step === 1 ? 'Step 1: Basic Details' : 'Step 2: Sensor Configuration'}
@@ -601,7 +660,7 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
                   disabled={loading}
                   className="bg-purple-600 hover:bg-purple-700"
                 >
-                  {loading ? 'Adding...' : `Add ${binType === 'single' ? 'Single Bin' : 'Smart Bin'}`}
+                  {loading ? (existingBin ? 'Updating...' : 'Adding...') : (existingBin ? `Update ${binType === 'single' ? 'Single Bin' : 'Smart Bin'}` : `Add ${binType === 'single' ? 'Single Bin' : 'Smart Bin'}`)}
                 </Button>
               )}
             </div>

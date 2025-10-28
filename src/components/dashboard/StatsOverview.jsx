@@ -5,12 +5,17 @@ import { Trash2, AlertTriangle, BarChart3, Activity, TrendingUp } from "lucide-r
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 
-export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFillLevel, totalCompartments }) {
+export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFillLevel, totalCompartments, activeSingleBins }) {
   // Generate real-time status based on actual data
-  // const getSmartBinStatus = () => {
-  //   if (activeSmartBins === 0) return { trend: "—", subtitle: "no bins active" };
-  //   return { trend: "●", subtitle: `${activeSmartBins} bin${activeSmartBins !== 1 ? 's' : ''} online` };
-  // };
+  const getSingleBinStatus = () => {
+    if (!Number.isInteger(activeSingleBins)) {
+      console.warn('Warning: activeSingleBins is not an integer');
+      return { trend: "—", subtitle: "Invalid data" };
+    }
+    
+    if (activeSingleBins === 0) return { trend: "—", subtitle: "no bins active" };
+    return { trend: "●", subtitle: `${activeSingleBins} bin${activeSingleBins !== 1 ? 's' : ''} online` };
+  };
 
   const getSmartBinStatus = () => {
     // console.log("Active SmartBinData : ",activeSmartBins);
@@ -40,9 +45,10 @@ export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFill
   const getCompartmentStatus = () => {
     if (totalCompartments === 0) return { trend: "—", subtitle: "no compartments" };
     if (totalCompartments === 1) return { trend: "●", subtitle: "single compartment" };
-    return { trend: "●●", subtitle: `${totalCompartments} compartments` };
+    return { trend: "●●", subtitle: `${totalCompartments} total` };
   };
 
+  const singleBinStatus = getSingleBinStatus();
   const smartBinStatus = getSmartBinStatus();
   const alertStatus = getCriticalAlertsStatus();
   const fillStatus = getFillLevelStatus();
@@ -50,15 +56,28 @@ export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFill
 
   const status = [
     {
+      title: "Active SingleBins",
+      value: activeSingleBins,
+      icon: Trash2,
+      trend: singleBinStatus.trend,
+      subtitle: singleBinStatus.subtitle,
+      color: {
+        primary: "from-indigo-500 to-blue-400",
+        liveColor: "#6366f1",
+        glow: "shadow-indigo-500/20"
+      },
+      clickable: false
+    },
+    {
       title: "Active SmartBins",
       value: activeSmartBins,
-      icon: Trash2,
+      icon: Activity,
       trend: smartBinStatus.trend,
       subtitle: smartBinStatus.subtitle,
       color: {
-        primary: "from-blue-500 to-cyan-400",
-        liveColor: "#3b82f6",
-        glow: "shadow-blue-500/20"
+        primary: "from-purple-500 to-pink-400",
+        liveColor: "#a855f7",
+        glow: "shadow-purple-500/20"
       },
       clickable: false
     },
@@ -77,34 +96,15 @@ export default function StatsOverview({ activeSmartBins, criticalAlerts, avgFill
       link: createPageUrl("Alerts")
     },
     {
-      title: "Average Fill Level",
-      value: `${avgFillLevel.toFixed(1)}%`,
-      icon: BarChart3,
-      trend: fillStatus.trend,
-      subtitle: fillStatus.subtitle,
-      color: {
-        primary: avgFillLevel >= 90 ? "from-red-500 to-pink-400" : 
-                avgFillLevel >= 70 ? "from-orange-500 to-yellow-400" : 
-                "from-green-500 to-emerald-400",
-        liveColor: avgFillLevel >= 90 ? "#ef4444" : 
-                  avgFillLevel >= 70 ? "#f59e0b" :
-                  "#10b981",
-        glow: avgFillLevel >= 90 ? "shadow-red-500/20" : 
-              avgFillLevel >= 70 ? "shadow-orange-500/20" :
-              "shadow-green-500/20"
-      },
-      clickable: false
-    },
-    {
       title: "Total Compartments",
       value: totalCompartments,
-      icon: Activity,
+      icon: BarChart3,
       trend: compartmentStatus.trend,
       subtitle: compartmentStatus.subtitle,
       color: {
-        primary: "from-purple-500 to-indigo-400",
-        liveColor: "#a855f7",
-        glow: "shadow-purple-500/20"
+        primary: "from-cyan-500 to-teal-400",
+        liveColor: "#06b6d4",
+        glow: "shadow-cyan-500/20"
       },
       clickable: false
     }
