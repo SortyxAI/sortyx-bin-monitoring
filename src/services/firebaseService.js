@@ -523,6 +523,77 @@ export class FirebaseService {
     }
   }
 
+  // ✅ NEW: Get Compartments with enriched sensor data from linked IoT devices
+  static async getCompartmentsWithSensorData() {
+    try {
+      logger.debug(MODULE, 'Getting Compartments with enriched sensor data...');
+      
+      if (!db) {
+        logger.error(MODULE, 'Firestore is not initialized');
+        return [];
+      }
+      
+      const compartments = await this.getCompartments();
+      
+      if (compartments.length === 0) {
+        return [];
+      }
+      
+      const enrichedCompartments = await Promise.all(
+        compartments.map(async (compartment) => {
+          try {
+            const deviceId = compartment.iot_device_id || compartment.device_id || compartment.deviceId;
+            
+            if (!deviceId) {
+              logger.trace(MODULE, `Compartment ${compartment.id} has no linked IoT device`);
+              return compartment;
+            }
+            
+            const sensorData = await this.getLatestSensorData(deviceId);
+            
+            if (!sensorData) {
+              logger.trace(MODULE, `No sensor data found for device ${deviceId}`);
+              return compartment;
+            }
+            
+            const enrichedCompartment = {
+              ...compartment,
+              sensorValue: sensorData.distance,
+              sensor_value: sensorData.distance,
+              distance: sensorData.distance,
+              fill_level: sensorData.fillLevel,
+              current_fill: sensorData.fillLevel,
+              battery_level: sensorData.battery,
+              temperature: sensorData.temperature,
+              humidity: sensorData.humidity,
+              air_quality: sensorData.raw?.uplink_message?.decoded_payload?.air_quality || 
+                          sensorData.raw?.decoded_payload?.air_quality,
+              odour_level: sensorData.raw?.uplink_message?.decoded_payload?.odour_level || 
+                          sensorData.raw?.decoded_payload?.odour_level,
+              tilt_status: sensorData.tilt,
+              last_sensor_update: sensorData.timestamp,
+              sensor_data_available: true
+            };
+            
+            logger.success(MODULE, `Enriched Compartment ${compartment.id} with sensor data`);
+            return enrichedCompartment;
+            
+          } catch (error) {
+            logger.error(MODULE, `Error enriching Compartment ${compartment.id}:`, error);
+            return compartment;
+          }
+        })
+      );
+      
+      logger.info(MODULE, `Enriched ${enrichedCompartments.length} Compartments with sensor data`);
+      return enrichedCompartments;
+      
+    } catch (error) {
+      logger.error(MODULE, 'Error fetching Compartments with sensor data:', error);
+      return [];
+    }
+  }
+
   // Get Alerts from Firestore
   static async getAlerts() {
     try {
@@ -1375,6 +1446,45 @@ export class FirebaseService {
       
     } catch (error) {
       logger.error(MODULE, 'Error deleting Compartment:', error);
+      throw error;
+    }
+  }
+
+  // ✅ NEW: Clear all alerts from Firestore
+  static async clearAllAlerts() {
+    try {
+      logger.debug(MODULE, 'Clearing all alerts from Firestore...');
+      
+      if (!db) {
+        logger.error(MODULE, 'Firestore is not initialized');
+        throw new Error('Firestore is not initialized');
+      }
+      
+      // Get all alerts
+      const alertsCollection = collection(db, 'alerts');
+      const alertsSnapshot = await getDocs(alertsCollection);
+      
+      if (alertsSnapshot.empty) {
+        logger.info(MODULE, 'No alerts to delete');
+        return { deleted: 0, message: 'No alerts found' };
+      }
+      
+      const deleteCount = alertsSnapshot.size;
+      logger.info(MODULE, `Found ${deleteCount} alerts to delete`);
+      
+      // Delete all alert documents in parallel
+      const deletePromises = alertsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      
+      logger.success(MODULE, `✅ Successfully deleted all ${deleteCount} alerts from Firestore`);
+      
+      return { 
+        deleted: deleteCount, 
+        message: `Successfully deleted ${deleteCount} alert(s)` 
+      };
+      
+    } catch (error) {
+      logger.error(MODULE, 'Error clearing all alerts:', error);
       throw error;
     }
   }

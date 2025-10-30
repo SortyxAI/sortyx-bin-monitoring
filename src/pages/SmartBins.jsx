@@ -1014,10 +1014,12 @@ export default function SmartBins() {
       {/* Compartment Management Modal */}
       <CompartmentManagementModal
         isOpen={isCompartmentModalOpen}
-        onClose={() => {
+        onClose={async () => {
           setIsCompartmentModalOpen(false);
           setSmartBinForCompartments(null);
           setInitialCompartmentToEdit(null); // Reset the initial compartment to edit
+          // ✅ FIX: Auto-refresh data after modal closes to show newly added/edited compartments
+          await loadData();
         }}
         smartBin={smartBinForCompartments}
         initialCompartment={initialCompartmentToEdit} // Pass the initial compartment to edit

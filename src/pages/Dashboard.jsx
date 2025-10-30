@@ -329,14 +329,14 @@ export default function Dashboard() {
             initializedRef.current = true;
           }
         } else {
-          // Load real data
+          // Load real data - ✅ FIX: Use getCompartmentsWithSensorData() to enrich compartments with sensor data
           const [smartBinData, compartmentData, singleBinData, alertData, firebaseSmartBins, firebaseSingleBins] = await Promise.all([
             SmartBin.list().catch(err => {
               console.error("SmartBin.list error:", err);
               return [];
             }),
-            Compartment.list().catch(err => {
-              console.error("Compartment.list error:", err);
+            FirebaseService.getCompartmentsWithSensorData().catch(err => {
+              console.error("FirebaseService.getCompartmentsWithSensorData error:", err);
               return [];
             }),
             SingleBin.list().catch(err => {
@@ -362,6 +362,7 @@ export default function Dashboard() {
           const combinedSingleBins = [...singleBinData, ...firebaseSingleBins];
           
           console.log("Firebase SmartBins:", firebaseSmartBins);
+          console.log("Firebase Compartments (with sensor data):", compartmentData);
           console.log("Firebase SingleBins:", firebaseSingleBins);
           console.log("Firebase Alerts:", alertData);
           

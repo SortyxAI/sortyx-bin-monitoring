@@ -14,7 +14,8 @@ import {
   Filter,
   Calendar,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
@@ -23,6 +24,8 @@ export default function Alerts() {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
@@ -69,6 +72,33 @@ export default function Alerts() {
       console.error("Error generating alerts:", error);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  // ✅ NEW: Clear all alerts from Firestore
+  const handleClearAllAlerts = async () => {
+    try {
+      setClearing(true);
+      const result = await FirebaseService.clearAllAlerts();
+      
+      toast({
+        title: "Success",
+        description: result.message,
+        variant: "default",
+      });
+      
+      setShowClearConfirm(false);
+      await loadAlerts();
+      
+    } catch (error) {
+      console.error("Error clearing alerts:", error);
+      toast({
+        title: "Error",
+        description: "Failed to clear alerts",
+        variant: "destructive"
+      });
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -143,22 +173,102 @@ export default function Alerts() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8 flex items-center justify-between"
+        className="mb-8 flex items-center justify-between flex-wrap gap-4"
       >
         <div>
       <h1 className="text-3xl max-[500px]:text-2xl font-bold mb-2 text-gray-900 dark:text-white ">Alert Management</h1>
           <p className="text-gray-600 dark:text-gray-300">Monitor and manage system alerts and notifications</p>
         </div>
-        <Button 
-          onClick={generateAlerts}
-          disabled={generating}
-          className="gap-2  text-white bg-gradient-to-r from-purple-600 to-indigo-600 
-          dark:from-pink-400 dark:to-fuchsia-500 dark:text-gray-100 "
-        >
-          <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
-          Check for Alerts
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={generateAlerts}
+            disabled={generating}
+            className="gap-2  text-white bg-gradient-to-r from-purple-600 to-indigo-600 
+            dark:from-pink-400 dark:to-fuchsia-500 dark:text-gray-100 "
+          >
+            <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+            Check for Alerts
+          </Button>
+          
+          {/* ✅ NEW: Clear All Button */}
+          {alerts.length > 0 && (
+            <Button 
+              onClick={() => setShowClearConfirm(true)}
+              disabled={clearing}
+              variant="destructive"
+              className="gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear All
+            </Button>
+          )}
+        </div>
       </motion.div>
+
+      {/* ✅ NEW: Clear All Confirmation Dialog */}
+      <AnimatePresence>
+        {showClearConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => !clearing && setShowClearConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-[#2A1F3D] rounded-lg shadow-2xl max-w-md w-full p-6 border-2 border-red-500"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Clear All Alerts</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">This action cannot be undone</p>
+                </div>
+              </div>
+              
+              <p className="text-gray-700 dark:text-gray-200 mb-6">
+                Are you sure you want to delete all <span className="font-bold text-red-600 dark:text-red-400">{alerts.length} alert(s)</span> from Firestore? 
+                This will permanently remove all alert records.
+              </p>
+              
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowClearConfirm(false)}
+                  disabled={clearing}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleClearAllAlerts}
+                  disabled={clearing}
+                  className="flex-1 gap-2"
+                >
+                  {clearing ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Delete All
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Filters */}
       <Card className="mb-6 bg-gradient-to-br from-white to-purple-50/30 dark:from-[#2A1F3D] dark:to-[#1F0F2E] border-2 border-purple-200 dark:border-purple-700">

@@ -465,120 +465,81 @@ const IndividualCompartmentCard = ({ compartment, index }) => {
   );
 };
 
-// ✅ FIXED: SmartBinLevelSensors now aggregates data from compartments
-const SmartBinLevelSensors = ({ smartBin, compartments = [] }) => {
-  // ✅ FIX: Aggregate sensor data from all compartments
-  const sensorData = [];
+// ✅ UPDATED: SmartBinCommonSensors - Shows only SmartBin-level common sensors (not aggregated from compartments)
+const SmartBinCommonSensors = ({ smartBin }) => {
+  // Only show sensors that are enabled at the SmartBin level (common to all compartments)
+  const commonSensorData = [];
   
-  // Helper to calculate average from compartments
-  const getAverageSensorValue = (sensorKey) => {
-    const values = compartments
-      .map(c => c[sensorKey])
-      .filter(v => v !== undefined && v !== null && !isNaN(v));
-    
-    if (values.length === 0) return null;
-    return Math.round(values.reduce((sum, val) => sum + val, 0) / values.length);
-  };
-
-  // Helper to check if any compartment has a sensor enabled
-  const isSensorEnabled = (sensorKey) => {
-    return compartments.some(c => c.sensors_enabled?.[sensorKey]);
-  };
-
-  // Temperature - average from all compartments
-  if (isSensorEnabled('temperature')) {
-    const avgTemp = getAverageSensorValue('temperature');
-    if (avgTemp !== null) {
-      const tempThreshold = smartBin.temp_threshold || 50;
-      sensorData.push({
-        type: 'temperature',
-        value: avgTemp,
-        unit: '°C',
-        icon: Thermometer,
-        color: avgTemp > tempThreshold ? 'text-red-500' : 'text-blue-500',
-        bgColor: avgTemp > tempThreshold ? 'from-red-500 to-red-600' : 'from-blue-500 to-blue-600'
-      });
-    }
+  // Temperature - only if enabled at SmartBin level
+  if (smartBin.sensors_enabled?.temperature && smartBin.temperature !== undefined && smartBin.temperature !== null) {
+    const tempThreshold = smartBin.temp_threshold || 50;
+    commonSensorData.push({
+      type: 'temperature',
+      label: 'Temperature',
+      value: smartBin.temperature,
+      unit: '°C',
+      icon: Thermometer,
+      color: smartBin.temperature > tempThreshold ? 'text-red-500' : 'text-blue-500',
+      bgColor: smartBin.temperature > tempThreshold ? 'from-red-500 to-red-600' : 'from-blue-500 to-blue-600'
+    });
   }
   
-  // Humidity - average from all compartments
-  if (isSensorEnabled('humidity')) {
-    const avgHumidity = getAverageSensorValue('humidity');
-    if (avgHumidity !== null) {
-      sensorData.push({
-        type: 'humidity',
-        value: avgHumidity,
-        unit: '%',
-        icon: Droplets,
-        color: 'text-blue-400',
-        bgColor: 'from-blue-400 to-blue-500'
-      });
-    }
+  // Humidity - only if enabled at SmartBin level
+  if (smartBin.sensors_enabled?.humidity && smartBin.humidity !== undefined && smartBin.humidity !== null) {
+    commonSensorData.push({
+      type: 'humidity',
+      label: 'Humidity',
+      value: smartBin.humidity,
+      unit: '%',
+      icon: Droplets,
+      color: 'text-blue-400',
+      bgColor: 'from-blue-400 to-blue-500'
+    });
   }
   
-  // Air Quality - average from all compartments
-  if (isSensorEnabled('air_quality')) {
-    const avgAirQuality = getAverageSensorValue('air_quality');
-    if (avgAirQuality !== null) {
-      sensorData.push({
-        type: 'air_quality',
-        value: avgAirQuality,
-        unit: ' AQI',
-        icon: Wind,
-        color: avgAirQuality > 150 ? 'text-red-500' : avgAirQuality > 100 ? 'text-yellow-500' : 'text-green-500',
-        bgColor: avgAirQuality > 150 ? 'from-red-500 to-red-600' : avgAirQuality > 100 ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600'
-      });
-    }
+  // Air Quality - only if enabled at SmartBin level
+  if (smartBin.sensors_enabled?.air_quality && smartBin.air_quality !== undefined && smartBin.air_quality !== null) {
+    commonSensorData.push({
+      type: 'air_quality',
+      label: 'Air Quality',
+      value: smartBin.air_quality,
+      unit: ' AQI',
+      icon: Wind,
+      color: smartBin.air_quality > 150 ? 'text-red-500' : smartBin.air_quality > 100 ? 'text-yellow-500' : 'text-green-500',
+      bgColor: smartBin.air_quality > 150 ? 'from-red-500 to-red-600' : smartBin.air_quality > 100 ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600'
+    });
   }
 
-  // Battery - show lowest battery level from all compartments (most critical)
-  if (isSensorEnabled('battery_level')) {
-    const batteryValues = compartments
-      .map(c => c.battery_level)
-      .filter(v => v !== undefined && v !== null && !isNaN(v));
-    
-    if (batteryValues.length > 0) {
-      const lowestBattery = Math.min(...batteryValues);
-      sensorData.push({
-        type: 'battery_level',
-        value: lowestBattery,
-        unit: '%',
-        icon: Battery,
-        color: lowestBattery < 20 ? 'text-red-500' : lowestBattery < 50 ? 'text-yellow-500' : 'text-green-500',
-        bgColor: lowestBattery < 20 ? 'from-red-500 to-red-600' : lowestBattery < 50 ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600'
-      });
-    }
+  // Battery - only if enabled at SmartBin level
+  if (smartBin.sensors_enabled?.battery_level && smartBin.battery_level !== undefined && smartBin.battery_level !== null) {
+    commonSensorData.push({
+      type: 'battery_level',
+      label: 'Battery',
+      value: smartBin.battery_level,
+      unit: '%',
+      icon: Battery,
+      color: smartBin.battery_level < 20 ? 'text-red-500' : smartBin.battery_level < 50 ? 'text-yellow-500' : 'text-green-500',
+      bgColor: smartBin.battery_level < 20 ? 'from-red-500 to-red-600' : smartBin.battery_level < 50 ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600'
+    });
   }
 
-  // ✅ NEW: Distance sensor - show average distance from all compartments
-  if (compartments.some(c => (c.distance !== undefined && c.distance !== null) || 
-                              (c.sensorValue !== undefined && c.sensorValue !== null))) {
-    const distanceValues = compartments
-      .map(c => c.distance || c.sensorValue || c.sensor_value)
-      .filter(v => v !== undefined && v !== null && !isNaN(v));
-    
-    if (distanceValues.length > 0) {
-      const avgDistance = Math.round(distanceValues.reduce((sum, val) => sum + val, 0) / distanceValues.length);
-      sensorData.push({
-        type: 'distance',
-        value: avgDistance,
-        unit: ' cm',
-        icon: BarChart3,
-        color: 'text-purple-500',
-        bgColor: 'from-purple-500 to-purple-600'
-      });
-    }
+  // Weight - only if enabled at SmartBin level
+  if (smartBin.sensors_enabled?.weight && smartBin.weight !== undefined && smartBin.weight !== null) {
+    commonSensorData.push({
+      type: 'weight',
+      label: 'Weight',
+      value: smartBin.weight,
+      unit: ' kg',
+      icon: Weight,
+      color: 'text-purple-500',
+      bgColor: 'from-purple-500 to-purple-600'
+    });
   }
 
-  if (sensorData.length === 0) {
+  // If no common sensors are enabled at SmartBin level, don't show this section
+  if (commonSensorData.length === 0) {
     return null;
   }
-
-  // Get latest sensor update time from compartments
-  const latestUpdate = compartments
-    .map(c => c.last_sensor_update)
-    .filter(Boolean)
-    .sort((a, b) => new Date(b) - new Date(a))[0];
 
   return (
     <div className="mt-4 p-4 bg-gradient-to-br from-indigo-50/80 to-purple-50/80 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-lg border-2 border-indigo-200 dark:border-indigo-700/50">
@@ -597,15 +558,15 @@ const SmartBinLevelSensors = ({ smartBin, compartments = [] }) => {
           >
             <Wifi className="w-4 h-4" />
           </motion.div>
-          <span>Aggregated Sensor Data</span>
+          <span>Common Sensors</span>
           <Badge className="ml-2 bg-indigo-100 text-indigo-700 dark:bg-indigo-800 dark:text-indigo-200 text-[10px] px-2 py-0">
-            {compartments.length} compartment{compartments.length !== 1 ? 's' : ''}
+            Bin Level
           </Badge>
         </div>
       </div>
       
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {sensorData.map((sensor, index) => (
+        {commonSensorData.map((sensor, index) => (
           <motion.div
             key={sensor.type}
             initial={{ opacity: 0, y: 10 }}
@@ -618,7 +579,7 @@ const SmartBinLevelSensors = ({ smartBin, compartments = [] }) => {
                 <sensor.icon className={`w-4 h-4 ${sensor.color}`} />
               </div>
               <span className="text-xs text-gray-600 dark:text-gray-300 uppercase font-medium tracking-wide">
-                {sensor.type.replace('_', ' ')}
+                {sensor.label}
               </span>
             </div>
             <div className="flex items-baseline gap-1">
@@ -652,10 +613,10 @@ const SmartBinLevelSensors = ({ smartBin, compartments = [] }) => {
         ))}
       </div>
       
-      {latestUpdate && (
+      {smartBin.last_sensor_update && (
         <div className="text-xs text-indigo-500 dark:text-indigo-400 flex items-center gap-1 mt-3 pt-3 border-t border-indigo-200 dark:border-indigo-700">
           <Activity className="w-3 h-3" />
-          Last updated: {new Date(latestUpdate).toLocaleString()}
+          Last updated: {new Date(smartBin.last_sensor_update).toLocaleString()}
         </div>
       )}
     </div>
@@ -863,8 +824,8 @@ export default function SmartBinCard({ smartBin, compartments = [], alerts = [],
                   </div>
                 )}
 
-                {/* ✅ FIXED: Pass compartments to SmartBinLevelSensors */}
-                <SmartBinLevelSensors smartBin={smartBin} compartments={compartments} />
+                {/* ✅ UPDATED: Pass smartBin to SmartBinCommonSensors */}
+                <SmartBinCommonSensors smartBin={smartBin} />
 
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm font-medium bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent border-b border-emerald-200 dark:border-emerald-700 pb-2">
