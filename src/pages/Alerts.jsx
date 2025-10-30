@@ -258,67 +258,159 @@ export default function Alerts() {
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ delay: index * 0.05 }}
               >
-                <Card className={`transition-all duration-300 bg-gradient-to-br from-white to-purple-50/30 dark:from-[#2A1F3D] dark:to-[#1F0F2E] border-2 border-purple-200 dark:border-purple-700 ${
-                  alert.severity === 'critical' && !alert.acknowledged ? 'ring-2 ring-red-200 dark:ring-red-700 animate-pulse' : ''
+                <Card className={`transition-all duration-300 ${
+                  alert.severity === 'critical' && !alert.acknowledged 
+                    ? 'bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/40 dark:to-red-800/40 border-2 border-red-500 dark:border-red-400 shadow-xl shadow-red-500/20'
+                    : 'bg-gradient-to-br from-white to-purple-50/30 dark:from-[#2A1F3D] dark:to-[#1F0F2E] border-2 border-purple-200 dark:border-purple-700'
                 } ${alert.acknowledged ? 'opacity-75' : ''}`}>
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
+                  <CardContent className="p-6 relative overflow-hidden">
+                    {/* ✅ NEW: Flashing red border animation for critical alerts */}
+                    {alert.severity === 'critical' && !alert.acknowledged && (
+                      <>
+                        <motion.div
+                          className="absolute inset-0 border-4 border-red-500 rounded-lg pointer-events-none"
+                          animate={{
+                            opacity: [0, 1, 0],
+                            scale: [0.98, 1, 0.98]
+                          }}
+                          transition={{
+                            duration: 1.5,
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          }}
+                        />
+                        <motion.div
+                          className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-red-600 to-red-500"
+                          animate={{
+                            opacity: [1, 0.3, 1],
+                            scaleX: [1, 0.95, 1]
+                          }}
+                          transition={{
+                            duration: 1,
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          }}
+                        />
+                      </>
+                    )}
+
+                    <div className="flex items-start gap-4 relative z-10">
                       <div className="flex-shrink-0 mt-1">
-                        {getSeverityIcon(alert.severity)}
+                        {alert.severity === 'critical' && !alert.acknowledged ? (
+                          <motion.div
+                            animate={{
+                              scale: [1, 1.2, 1],
+                              rotate: [0, 10, -10, 0]
+                            }}
+                            transition={{
+                              duration: 0.8,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          >
+                            {getSeverityIcon(alert.severity)}
+                          </motion.div>
+                        ) : (
+                          getSeverityIcon(alert.severity)
+                        )}
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge className={`${getSeverityColor(alert.severity)} border`}>
-                            {alert.severity}
-                          </Badge>
-                          <Badge variant="outline">
-                            {alert.type?.replace('_', ' ').toUpperCase()}
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          {alert.severity === 'critical' && !alert.acknowledged ? (
+                            <motion.div
+                              animate={{
+                                scale: [1, 1.05, 1],
+                                boxShadow: [
+                                  '0 0 0 0 rgba(239, 68, 68, 0.7)',
+                                  '0 0 0 8px rgba(239, 68, 68, 0)',
+                                  '0 0 0 0 rgba(239, 68, 68, 0)'
+                                ]
+                              }}
+                              transition={{
+                                duration: 1.5,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                              }}
+                            >
+                              <Badge className={`${getSeverityColor(alert.severity)} border-2 border-red-600 font-bold text-sm px-3 py-1`}>
+                                🚨 {alert.severity.toUpperCase()}
+                              </Badge>
+                            </motion.div>
+                          ) : (
+                            <Badge className={`${getSeverityColor(alert.severity)} border`}>
+                              {alert.severity}
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className={alert.severity === 'critical' ? 'border-red-400 text-red-700 dark:text-red-300' : ''}>
+                            {alert.alert_type?.replace('_', ' ').toUpperCase()}
                           </Badge>
                           {alert.binType && (
-                            <Badge variant="secondary">
+                            <Badge variant="secondary" className={alert.severity === 'critical' ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200' : ''}>
                               {alert.binType}
                             </Badge>
                           )}
                           {alert.acknowledged && (
-                            <Badge className="bg-green-100 text-green-700">
-                              Acknowledged
+                            <Badge className="bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-200">
+                              ✓ Acknowledged
                             </Badge>
                           )}
                         </div>
 
-                        <h3 className="font-semibold text-gray-900 dark:text-purple-100 mb-1">
+                        <h3 className={`font-semibold mb-1 ${
+                          alert.severity === 'critical' && !alert.acknowledged
+                            ? 'text-red-800 dark:text-red-200 text-lg'
+                            : 'text-gray-900 dark:text-purple-100'
+                        }`}>
                           {alert.binName}
                         </h3>
                         
-                        <p className="text-gray-700 dark:text-purple-200 mb-2">{alert.message}</p>
+                        <p className={`mb-2 ${
+                          alert.severity === 'critical' && !alert.acknowledged
+                            ? 'text-red-700 dark:text-red-200 font-medium'
+                            : 'text-gray-700 dark:text-purple-200'
+                        }`}>
+                          {alert.message}
+                        </p>
                         
                         {alert.currentValue !== null && alert.threshold !== null && (
-                          <p className="text-sm text-gray-500 dark:text-purple-300 mb-2">
-                            Current: <span className="font-medium">{alert.currentValue}{alert.unit}</span>
+                          <div className={`text-sm mb-2 ${
+                            alert.severity === 'critical' && !alert.acknowledged
+                              ? 'text-red-600 dark:text-red-300 font-medium'
+                              : 'text-gray-500 dark:text-purple-300'
+                          }`}>
+                            <span>Current: <span className="font-bold">{alert.currentValue}{alert.unit}</span></span>
                             {' / '}
-                            Threshold: <span className="font-medium">{alert.threshold}{alert.unit}</span>
-                          </p>
+                            <span>Threshold: <span className="font-bold">{alert.threshold}{alert.unit}</span></span>
+                          </div>
                         )}
 
                         <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-purple-300">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            {format(new Date(alert.timestamp), 'MMM dd, yyyy')}
+                            {format(new Date(alert.created_at || alert.timestamp), 'MMM dd, yyyy')}
                           </div>
                           <div className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            {format(new Date(alert.timestamp), 'HH:mm')}
+                            {format(new Date(alert.created_at || alert.timestamp), 'HH:mm')}
                           </div>
+                          {alert.location && (
+                            <div className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                              📍 {alert.location}
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {!alert.acknowledged && (
+                      {!alert.acknowledged && alert.status === 'active' && (
                         <div className="flex gap-2">
                           <Button
                             size="sm"
                             onClick={() => handleAcknowledge(alert.id)}
-                            className="bg-green-600 hover:bg-green-700"
+                            className={alert.severity === 'critical' 
+                              ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg'
+                              : 'bg-green-600 hover:bg-green-700'
+                            }
                           >
                             <Check className="w-4 h-4 mr-1" />
                             Acknowledge

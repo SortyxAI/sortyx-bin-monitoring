@@ -108,15 +108,18 @@ const IndividualCompartmentCard = ({ compartment, index }) => {
   // Collect compartment sensor data - excluding fill level
   const compartmentSensorData = [];
   
-  // Battery sensor - ALWAYS show, default to 0% if offline or no data
+  // ✅ FIX: Battery sensor - Show as ACTIVE if battery_level has valid data
   if (compartment.sensors_enabled?.battery_level) {
-    const isOnline = compartment.status === 'active' && 
-                     compartment.last_sensor_update && 
-                     (Date.now() - new Date(compartment.last_sensor_update).getTime()) < 60000;
+    // Check if we have valid battery data (not null, not undefined)
+    const hasBatteryData = compartment.battery_level !== undefined && 
+                           compartment.battery_level !== null;
     
-    const batteryValue = (isOnline && compartment.battery_level !== undefined) 
-      ? compartment.battery_level 
-      : 0;
+    // Determine if sensor is online based on data availability
+    const isOnline = hasBatteryData && 
+                     compartment.status === 'active' && 
+                     compartment.sensor_data_available !== false;
+    
+    const batteryValue = hasBatteryData ? compartment.battery_level : 0;
     
     compartmentSensorData.push({
       type: 'battery',
@@ -202,8 +205,10 @@ const IndividualCompartmentCard = ({ compartment, index }) => {
     });
   }
 
-  const isLiveActive = compartment.last_sensor_update && 
-    (Date.now() - new Date(compartment.last_sensor_update).getTime()) < 60000;
+  // ✅ FIX: Determine if sensors are live based on data availability
+  const isLiveActive = (compartment.sensor_data_available !== false && compartment.status === 'active') ||
+                       (compartment.last_sensor_update && 
+                        (Date.now() - new Date(compartment.last_sensor_update).getTime()) < 300000); // 5 minutes
 
   return (
     <motion.div
@@ -296,6 +301,34 @@ const IndividualCompartmentCard = ({ compartment, index }) => {
 
           {/* Layer 3: Fill Level Section */}
           <div className="bg-gradient-to-r from-slate-50 to-indigo-50 dark:from-purple-900/50 dark:to-indigo-900/50 rounded-lg p-3 mb-3 border border-indigo-200 dark:border-indigo-700">
+            {/* ✅ NEW: LIVE Badge at top of Fill Level section */}
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Fill Level Status</span>
+              <motion.div
+                className="flex items-center gap-1"
+                animate={isLiveActive ? {
+                  scale: [1, 1.1, 1],
+                  opacity: [1, 0.7, 1]
+                } : {}}
+                transition={isLiveActive ? {
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                } : {}}
+              >
+                <Wifi className={`w-2.5 h-2.5 ${isLiveActive ? 'text-green-500' : 'text-gray-400'}`} />
+                <Badge 
+                  className={`text-[8px] px-1 py-0 ${
+                    isLiveActive 
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' 
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                  }`}
+                >
+                  {isLiveActive ? 'LIVE' : 'OFFLINE'}
+                </Badge>
+              </motion.div>
+            </div>
+            
             <div className="flex items-center gap-3 mb-2">
               <CompartmentPieChart compartment={compartment} size="small" />
               <div className="flex-1">
@@ -353,29 +386,7 @@ const IndividualCompartmentCard = ({ compartment, index }) => {
                     </h5>
                   </div>
                 </div>
-                <motion.div
-                  className="flex items-center gap-1"
-                  animate={isLiveActive ? {
-                    scale: [1, 1.1, 1],
-                    opacity: [1, 0.7, 1]
-                  } : {}}
-                  transition={isLiveActive ? {
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  } : {}}
-                >
-                  <Wifi className={`w-2.5 h-2.5 ${isLiveActive ? 'text-green-500' : 'text-gray-400'}`} />
-                  <Badge 
-                    className={`text-[8px] px-1 py-0 ${
-                      isLiveActive 
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' 
-                        : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                    }`}
-                  >
-                    {isLiveActive ? 'LIVE' : 'OFFLINE'}
-                  </Badge>
-                </motion.div>
+                {/* ✅ REMOVED: LIVE badge from here - now in Fill Level section */}
               </div>
 
               {/* Sensor Grid */}
@@ -454,71 +465,145 @@ const IndividualCompartmentCard = ({ compartment, index }) => {
   );
 };
 
-const SmartBinLevelSensors = ({ smartBin }) => {
+// ✅ FIXED: SmartBinLevelSensors now aggregates data from compartments
+const SmartBinLevelSensors = ({ smartBin, compartments = [] }) => {
+  // ✅ FIX: Aggregate sensor data from all compartments
   const sensorData = [];
   
-  if (smartBin.sensors_enabled?.temperature && smartBin.temperature !== undefined) {
-    sensorData.push({
-      type: 'temperature',
-      value: smartBin.temperature,
-      unit: '°C',
-      icon: Thermometer,
-      color: smartBin.temperature > (smartBin.temp_threshold || 50) ? 'text-red-500' : 'text-blue-500'
-    });
+  // Helper to calculate average from compartments
+  const getAverageSensorValue = (sensorKey) => {
+    const values = compartments
+      .map(c => c[sensorKey])
+      .filter(v => v !== undefined && v !== null && !isNaN(v));
+    
+    if (values.length === 0) return null;
+    return Math.round(values.reduce((sum, val) => sum + val, 0) / values.length);
+  };
+
+  // Helper to check if any compartment has a sensor enabled
+  const isSensorEnabled = (sensorKey) => {
+    return compartments.some(c => c.sensors_enabled?.[sensorKey]);
+  };
+
+  // Temperature - average from all compartments
+  if (isSensorEnabled('temperature')) {
+    const avgTemp = getAverageSensorValue('temperature');
+    if (avgTemp !== null) {
+      const tempThreshold = smartBin.temp_threshold || 50;
+      sensorData.push({
+        type: 'temperature',
+        value: avgTemp,
+        unit: '°C',
+        icon: Thermometer,
+        color: avgTemp > tempThreshold ? 'text-red-500' : 'text-blue-500',
+        bgColor: avgTemp > tempThreshold ? 'from-red-500 to-red-600' : 'from-blue-500 to-blue-600'
+      });
+    }
   }
   
-  if (smartBin.sensors_enabled?.humidity && smartBin.humidity !== undefined) {
-    sensorData.push({
-      type: 'humidity',
-      value: smartBin.humidity,
-      unit: '%',
-      icon: Droplets,
-      color: 'text-blue-400'
-    });
+  // Humidity - average from all compartments
+  if (isSensorEnabled('humidity')) {
+    const avgHumidity = getAverageSensorValue('humidity');
+    if (avgHumidity !== null) {
+      sensorData.push({
+        type: 'humidity',
+        value: avgHumidity,
+        unit: '%',
+        icon: Droplets,
+        color: 'text-blue-400',
+        bgColor: 'from-blue-400 to-blue-500'
+      });
+    }
   }
   
-  if (smartBin.sensors_enabled?.air_quality && smartBin.air_quality !== undefined) {
-    sensorData.push({
-      type: 'air_quality',
-      value: smartBin.air_quality,
-      unit: 'AQI',
-      icon: Wind,
-      color: smartBin.air_quality > 150 ? 'text-red-500' : smartBin.air_quality > 100 ? 'text-yellow-500' : 'text-green-500'
-    });
+  // Air Quality - average from all compartments
+  if (isSensorEnabled('air_quality')) {
+    const avgAirQuality = getAverageSensorValue('air_quality');
+    if (avgAirQuality !== null) {
+      sensorData.push({
+        type: 'air_quality',
+        value: avgAirQuality,
+        unit: ' AQI',
+        icon: Wind,
+        color: avgAirQuality > 150 ? 'text-red-500' : avgAirQuality > 100 ? 'text-yellow-500' : 'text-green-500',
+        bgColor: avgAirQuality > 150 ? 'from-red-500 to-red-600' : avgAirQuality > 100 ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600'
+      });
+    }
   }
 
-  if (smartBin.sensors_enabled?.battery_level && smartBin.battery_level !== undefined) {
-    sensorData.push({
-      type: 'battery_level',
-      value: smartBin.battery_level,
-      unit: '%',
-      icon: Battery,
-      color: smartBin.battery_level < 20 ? 'text-red-500' : smartBin.battery_level < 50 ? 'text-yellow-500' : 'text-green-500'
-    });
+  // Battery - show lowest battery level from all compartments (most critical)
+  if (isSensorEnabled('battery_level')) {
+    const batteryValues = compartments
+      .map(c => c.battery_level)
+      .filter(v => v !== undefined && v !== null && !isNaN(v));
+    
+    if (batteryValues.length > 0) {
+      const lowestBattery = Math.min(...batteryValues);
+      sensorData.push({
+        type: 'battery_level',
+        value: lowestBattery,
+        unit: '%',
+        icon: Battery,
+        color: lowestBattery < 20 ? 'text-red-500' : lowestBattery < 50 ? 'text-yellow-500' : 'text-green-500',
+        bgColor: lowestBattery < 20 ? 'from-red-500 to-red-600' : lowestBattery < 50 ? 'from-yellow-500 to-yellow-600' : 'from-green-500 to-green-600'
+      });
+    }
+  }
+
+  // ✅ NEW: Distance sensor - show average distance from all compartments
+  if (compartments.some(c => (c.distance !== undefined && c.distance !== null) || 
+                              (c.sensorValue !== undefined && c.sensorValue !== null))) {
+    const distanceValues = compartments
+      .map(c => c.distance || c.sensorValue || c.sensor_value)
+      .filter(v => v !== undefined && v !== null && !isNaN(v));
+    
+    if (distanceValues.length > 0) {
+      const avgDistance = Math.round(distanceValues.reduce((sum, val) => sum + val, 0) / distanceValues.length);
+      sensorData.push({
+        type: 'distance',
+        value: avgDistance,
+        unit: ' cm',
+        icon: BarChart3,
+        color: 'text-purple-500',
+        bgColor: 'from-purple-500 to-purple-600'
+      });
+    }
   }
 
   if (sensorData.length === 0) {
     return null;
   }
 
+  // Get latest sensor update time from compartments
+  const latestUpdate = compartments
+    .map(c => c.last_sensor_update)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b) - new Date(a))[0];
+
   return (
     <div className="mt-4 p-4 bg-gradient-to-br from-indigo-50/80 to-purple-50/80 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-lg border-2 border-indigo-200 dark:border-indigo-700/50">
-      <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300 mb-3 border-b border-indigo-300 dark:border-indigo-700 pb-2">
-        <motion.div
-          animate={{
-            scale: [1, 1.3, 1],
-            rotate: [0, 15, -15, 0]
-          }}
-          transition={{
-            duration: 3,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        >
-          <Wifi className="w-4 h-4" />
-        </motion.div>
-        <span>SmartBin Common Sensors</span>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 dark:text-indigo-300 border-b border-indigo-300 dark:border-indigo-700 pb-2 flex-1">
+          <motion.div
+            animate={{
+              scale: [1, 1.3, 1],
+              rotate: [0, 15, -15, 0]
+            }}
+            transition={{
+              duration: 3,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          >
+            <Wifi className="w-4 h-4" />
+          </motion.div>
+          <span>Aggregated Sensor Data</span>
+          <Badge className="ml-2 bg-indigo-100 text-indigo-700 dark:bg-indigo-800 dark:text-indigo-200 text-[10px] px-2 py-0">
+            {compartments.length} compartment{compartments.length !== 1 ? 's' : ''}
+          </Badge>
+        </div>
       </div>
+      
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {sensorData.map((sensor, index) => (
           <motion.div
@@ -529,21 +614,48 @@ const SmartBinLevelSensors = ({ smartBin }) => {
             className="bg-white/90 dark:bg-gradient-to-br dark:from-indigo-800/50 dark:to-purple-800/50 rounded-lg p-3 border border-indigo-200 dark:border-indigo-600/40 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-2 mb-2">
-              <sensor.icon className={`w-4 h-4 ${sensor.color}`} />
+              <div className={`w-7 h-7 rounded-md bg-gradient-to-br ${sensor.bgColor}/10 flex items-center justify-center`}>
+                <sensor.icon className={`w-4 h-4 ${sensor.color}`} />
+              </div>
               <span className="text-xs text-gray-600 dark:text-gray-300 uppercase font-medium tracking-wide">
                 {sensor.type.replace('_', ' ')}
               </span>
             </div>
-            <div className="text-lg font-bold text-gray-900 dark:text-white">
-              {sensor.value}{sensor.unit}
+            <div className="flex items-baseline gap-1">
+              <div className="text-lg font-bold text-gray-900 dark:text-white">
+                {sensor.value}{sensor.unit}
+              </div>
             </div>
+            {/* Progress bar for percentage-based sensors */}
+            {(sensor.type === 'battery_level' || sensor.type === 'humidity') && (
+              <div className="mt-2 h-1.5 bg-gray-200 dark:bg-indigo-900/60 rounded-full overflow-hidden shadow-inner">
+                <motion.div
+                  className={`h-full rounded-full bg-gradient-to-r ${sensor.bgColor}`}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${sensor.value}%` }}
+                  transition={{ duration: 0.8, delay: index * 0.1 }}
+                />
+              </div>
+            )}
+            {/* Warning for low battery */}
+            {sensor.type === 'battery_level' && sensor.value < 20 && (
+              <motion.p 
+                className="text-[10px] text-red-600 dark:text-red-400 mt-1 flex items-center gap-1"
+                animate={{ opacity: [1, 0.5, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              >
+                <AlertTriangle className="w-3 h-3" />
+                Critical
+              </motion.p>
+            )}
           </motion.div>
         ))}
       </div>
-      {smartBin.last_sensor_update && (
-        <div className="text-xs text-indigo-500 dark:text-indigo-400 flex items-center gap-1 mt-3">
+      
+      {latestUpdate && (
+        <div className="text-xs text-indigo-500 dark:text-indigo-400 flex items-center gap-1 mt-3 pt-3 border-t border-indigo-200 dark:border-indigo-700">
           <Activity className="w-3 h-3" />
-          Updated: {new Date(smartBin.last_sensor_update).toLocaleTimeString()}
+          Last updated: {new Date(latestUpdate).toLocaleString()}
         </div>
       )}
     </div>
@@ -561,11 +673,25 @@ export default function SmartBinCard({ smartBin, compartments = [], alerts = [],
   const criticalAlerts = smartBinAlerts.filter(alert => alert.severity === 'critical').length;
   const hasCompartments = compartments.length > 0;
 
-  const hasOverThreshold = compartments.some(comp => 
-    (comp.current_fill || 0) >= (comp.fill_threshold || 90)
-  );
+  // ✅ FIX: Calculate actual fill percentage for each compartment instead of using raw current_fill
+  const hasOverThreshold = compartments.some(comp => {
+    const fillPercentage = calculateFillLevel(
+      comp.sensorValue || comp.sensor_value,
+      comp.binHeight || comp.bin_height
+    );
+    return fillPercentage >= (comp.fill_threshold || 90);
+  });
 
-  const overallStatus = hasOverThreshold ? 'critical' : hasCompartments ? 'normal' : 'maintenance';
+  // ✅ FIX: Check battery levels too - if any compartment has low battery, it needs attention
+  const hasLowBattery = compartments.some(comp => {
+    const batteryLevel = comp.battery_level;
+    return batteryLevel !== undefined && batteryLevel !== null && batteryLevel < 20;
+  });
+
+  // ✅ FIX: Overall status logic - critical only if fill level is high OR battery is critically low
+  const overallStatus = (hasOverThreshold || hasLowBattery) ? 'critical' : 
+                        hasCompartments ? 'normal' : 
+                        'maintenance';
   
   const statusColor = overallStatus === 'critical' ? 
     'border-red-500 dark:border-red-400 shadow-red-500/20 dark:shadow-red-400/30' : 
@@ -737,7 +863,8 @@ export default function SmartBinCard({ smartBin, compartments = [], alerts = [],
                   </div>
                 )}
 
-                <SmartBinLevelSensors smartBin={smartBin} />
+                {/* ✅ FIXED: Pass compartments to SmartBinLevelSensors */}
+                <SmartBinLevelSensors smartBin={smartBin} compartments={compartments} />
 
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm font-medium bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent border-b border-emerald-200 dark:border-emerald-700 pb-2">

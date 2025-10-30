@@ -2,39 +2,56 @@ import { database, db } from '../config/firebase';
 import { ref, onValue, push, set, get, query, orderByChild, limitToLast, orderByKey, child } from 'firebase/database';
 import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, orderBy, limit, where, query as firestoreQuery } from 'firebase/firestore';
 
+// ✅ Import debug logging system
+const logger = (() => {
+  try {
+    return require('../utils').logger;
+  } catch {
+    // Fallback if logger not available
+    return {
+      error: console.error.bind(console),
+      warn: console.warn.bind(console),
+      info: console.info.bind(console),
+      debug: () => {},
+      trace: () => {},
+      success: () => {},
+      group: () => {},
+      groupEnd: () => {}
+    };
+  }
+})();
+
+const MODULE = 'FirebaseService';
+
 export class FirebaseService {
   
   // Verify Firestore connection
   static async verifyConnection() {
     try {
-      console.log('🔍 Verifying Firestore connection...');
+      logger.debug(MODULE, 'Verifying Firestore connection...');
       
       if (!db) {
-        console.error('❌ Firestore instance (db) is not initialized');
+        logger.error(MODULE, 'Firestore instance (db) is not initialized');
         return false;
       }
       
-      console.log('✅ Firestore instance exists:', db);
+      logger.trace(MODULE, 'Firestore instance exists:', db);
       
       // Try to read a test collection to verify connection
       const testCollection = collection(db, 'health-check');
       const testQuery = firestoreQuery(testCollection, limit(1));
       const snapshot = await getDocs(testQuery);
       
-      console.log('✅ Firestore connection verified successfully');
-      console.log('📊 Test query returned', snapshot.size, 'document(s)');
+      logger.success(MODULE, 'Firestore connection verified', { documents: snapshot.size });
       return true;
       
     } catch (error) {
-      console.error('❌ Firestore connection verification failed:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
+      logger.error(MODULE, 'Firestore connection verification failed:', error);
       
       if (error.code === 'permission-denied') {
-        console.error('🔒 Firestore security rules are blocking access');
-        console.error('💡 Check your Firestore security rules in Firebase Console');
+        logger.warn(MODULE, 'Firestore security rules are blocking access');
       } else if (error.code === 'unavailable') {
-        console.error('🌐 Network connection issue - check internet connectivity');
+        logger.warn(MODULE, 'Network connection issue - check internet connectivity');
       }
       
       return false;
@@ -44,18 +61,11 @@ export class FirebaseService {
   // Dynamically discover available collections in Firestore
   static async discoverCollections() {
     try {
-      console.log('🔍 Discovering Firestore collections...');
+      logger.debug(MODULE, 'Discovering Firestore collections...');
       
-      // List of known collection patterns to check
       const knownPatterns = [
-        'iot-devices',
-        'smart-bins',
-        'single-bins',
-        'compartments',
-        'alerts',
-        'users',
-        'all-sensor-data',
-        'sensor-data-*'
+        'iot-devices', 'smart-bins', 'single-bins', 'compartments',
+        'alerts', 'users', 'all-sensor-data', 'sensor-data-*'
       ];
       
       const foundCollections = [];
@@ -63,9 +73,7 @@ export class FirebaseService {
       for (const pattern of knownPatterns) {
         try {
           if (pattern.includes('*')) {
-            // Handle wildcard patterns
             const basePattern = pattern.replace('*', '');
-            // Check common device IDs
             const deviceIds = ['sortyx-sensor-two', 'sortyx-sensor-three', 'sortyx-sensor-four','sortyx-sensor-five','plaese-work'];
             for (const deviceId of deviceIds) {
               const collectionName = `${basePattern}${deviceId}`;
@@ -73,29 +81,27 @@ export class FirebaseService {
               const testSnapshot = await getDocs(firestoreQuery(testRef, limit(1)));
               if (!testSnapshot.empty) {
                 foundCollections.push(collectionName);
-                console.log(`✅ Found collection: ${collectionName}`);
+                logger.trace(MODULE, `Found collection: ${collectionName}`);
               }
             }
           } else {
-            // Check exact collection name
             const testRef = collection(db, pattern);
             const testSnapshot = await getDocs(firestoreQuery(testRef, limit(1)));
             if (!testSnapshot.empty) {
               foundCollections.push(pattern);
-              console.log(`✅ Found collection: ${pattern} (${testSnapshot.size} documents)`);
+              logger.trace(MODULE, `Found collection: ${pattern}`, { documents: testSnapshot.size });
             }
           }
         } catch (error) {
-          // Collection doesn't exist or no permission, continue
-          console.log(`⏭️ Skipping collection: ${pattern}`);
+          logger.trace(MODULE, `Skipping collection: ${pattern}`);
         }
       }
       
-      console.log('📦 Discovered collections:', foundCollections);
+      logger.debug(MODULE, 'Discovered collections:', foundCollections);
       return foundCollections;
       
     } catch (error) {
-      console.error('❌ Error discovering collections:', error);
+      logger.error(MODULE, 'Error discovering collections:', error);
       return [];
     }
   }
@@ -103,117 +109,138 @@ export class FirebaseService {
   // Get all sensor data collections from FIRESTORE (now dynamic)
   static async getSensorCollections() {
     try {
-      console.log('🔍 Getting sensor data collections from Firestore...');
+      logger.debug(MODULE, 'Getting sensor data collections from Firestore...');
       
-      // First verify connection
       const isConnected = await this.verifyConnection();
       if (!isConnected) {
-        console.error('❌ Firestore connection failed - returning empty array');
+        logger.error(MODULE, 'Firestore connection failed - returning empty array');
         return [];
       }
       
-      // Try to discover collections dynamically
       const discoveredCollections = await this.discoverCollections();
-      
-      // Filter for sensor data collections
       const sensorCollections = discoveredCollections.filter(name => 
         name.includes('sensor-data') || name.includes('iot-data')
       );
       
       if (sensorCollections.length > 0) {
-        console.log('✅ Found sensor collections:', sensorCollections);
+        logger.success(MODULE, 'Found sensor collections:', sensorCollections);
         return sensorCollections;
       }
       
-      // Fallback to known collections
       const knownCollections = [
-        'all-sensor-data',
-        'sensor-data-plaese-work',
-        'sensor-data-sortyx-sensor-two',
-        'sensor-data-sortyx-sensor-three',
-        'sensor-data-sortyx-sensor-four',
-        'sensor-data-sortyx-sensor-five',
-        'iot-data',
-        'health-check'
+        'all-sensor-data', 'sensor-data-plaese-work',
+        'sensor-data-sortyx-sensor-two', 'sensor-data-sortyx-sensor-three',
+        'sensor-data-sortyx-sensor-four', 'sensor-data-sortyx-sensor-five',
+        'iot-data', 'health-check'
       ];
       
-      console.log('⚠️ Using fallback sensor collections:', knownCollections);
+      logger.debug(MODULE, 'Using fallback sensor collections:', knownCollections);
       return knownCollections;
       
     } catch (error) {
-      console.error('❌ Error getting sensor collections:', error);
+      logger.error(MODULE, 'Error getting sensor collections:', error);
       return [];
     }
   }
 
-  // Get latest sensor data for a specific device from FIRESTORE
+  // Get latest sensor data for a specific device from FIRESTORE - OPTIMIZED
   static async getLatestSensorData(deviceId = 'sortyx-sensor-two') {
-    console.log(`🔍 Getting latest sensor data for device: ${deviceId}`);
+    logger.debug(MODULE, `Getting latest sensor data for device: ${deviceId}`);
     
     try {
-      // Verify Firestore connection first
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         return null;
       }
       
-      // Try device-specific collection first
       const deviceCollection = `sensor-data-${deviceId}`;
-      console.log(`🎯 Checking Firestore collection: ${deviceCollection}`);
+      logger.trace(MODULE, `Checking Firestore collection: ${deviceCollection}`);
       
       const deviceCollectionRef = collection(db, deviceCollection);
-      const deviceQuery = firestoreQuery(
-        deviceCollectionRef,
-        orderBy('receivedAt', 'desc'),
-        limit(1)
-      );
       
-      const deviceSnapshot = await getDocs(deviceQuery);
-      
-      if (!deviceSnapshot.empty) {
-        const latestDoc = deviceSnapshot.docs[0];
-        const data = latestDoc.data();
-        console.log(`✅ Found latest data in ${deviceCollection}:`, data);
-        return this.formatSensorData(data);
-      }
-      
-      // Fallback to all-sensor-data collection
-      console.log(`⚡ Trying fallback: all-sensor-data collection`);
-      const allDataRef = collection(db, 'all-sensor-data');
-      const allDataQuery = firestoreQuery(
-        allDataRef,
-        orderBy('receivedAt', 'desc'),
-        limit(50) // Get more to filter by device
-      );
-      
-      const allSnapshot = await getDocs(allDataQuery);
-      
-      if (!allSnapshot.empty) {
-        // Find entries for this specific device
-        const deviceDocs = allSnapshot.docs.filter(doc => {
-          const data = doc.data();
-          return data.deviceId === deviceId || 
-                 doc.id.includes(deviceId) ||
-                 JSON.stringify(data).includes(deviceId);
-        });
+      try {
+        const deviceQuery = firestoreQuery(
+          deviceCollectionRef,
+          orderBy('receivedAt', 'desc'),
+          limit(1)
+        );
         
-        if (deviceDocs.length > 0) {
-          const latestData = deviceDocs[0].data();
-          console.log(`📊 Found data in all-sensor-data for ${deviceId}:`, latestData);
-          return this.formatSensorData(latestData);
+        const deviceSnapshot = await getDocs(deviceQuery);
+        
+        if (!deviceSnapshot.empty) {
+          const latestDoc = deviceSnapshot.docs[0];
+          const data = latestDoc.data();
+          logger.success(MODULE, `Found latest data in ${deviceCollection}`);
+          return this.formatSensorData(data);
+        }
+      } catch (orderByError) {
+        logger.trace(MODULE, 'OrderBy failed, trying without ordering...');
+        const simpleQuery = firestoreQuery(deviceCollectionRef, limit(1));
+        const deviceSnapshot = await getDocs(simpleQuery);
+        
+        if (!deviceSnapshot.empty) {
+          const latestDoc = deviceSnapshot.docs[0];
+          const data = latestDoc.data();
+          logger.success(MODULE, `Found data in ${deviceCollection} (unordered)`);
+          return this.formatSensorData(data);
         }
       }
       
-      console.log(`⚠️ No sensor data found for device: ${deviceId}`);
+      logger.trace(MODULE, `Trying fallback: all-sensor-data collection`);
+      const allDataRef = collection(db, 'all-sensor-data');
+      
+      try {
+        const allDataQuery = firestoreQuery(
+          allDataRef,
+          orderBy('receivedAt', 'desc'),
+          limit(10)
+        );
+        
+        const allSnapshot = await getDocs(allDataQuery);
+        
+        if (!allSnapshot.empty) {
+          const deviceDoc = allSnapshot.docs.find(doc => {
+            const data = doc.data();
+            return data.deviceId === deviceId || 
+                   data.end_device_ids?.device_id === deviceId ||
+                   doc.id.includes(deviceId);
+          });
+          
+          if (deviceDoc) {
+            const latestData = deviceDoc.data();
+            logger.success(MODULE, `Found data in all-sensor-data for ${deviceId}`);
+            return this.formatSensorData(latestData);
+          }
+        }
+      } catch (allDataError) {
+        logger.trace(MODULE, 'OrderBy failed on all-sensor-data, trying without ordering...');
+        const simpleQuery = firestoreQuery(allDataRef, limit(10));
+        const allSnapshot = await getDocs(simpleQuery);
+        
+        if (!allSnapshot.empty) {
+          const deviceDoc = allSnapshot.docs.find(doc => {
+            const data = doc.data();
+            return data.deviceId === deviceId || 
+                   data.end_device_ids?.device_id === deviceId ||
+                   doc.id.includes(deviceId);
+          });
+          
+          if (deviceDoc) {
+            const latestData = deviceDoc.data();
+            logger.success(MODULE, `Found data in all-sensor-data for ${deviceId} (unordered)`);
+            return this.formatSensorData(latestData);
+          }
+        }
+      }
+      
+      logger.warn(MODULE, `No sensor data found for device: ${deviceId}`);
       return null;
       
     } catch (error) {
-      console.error('❌ Error fetching latest sensor data:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
+      logger.error(MODULE, 'Error fetching latest sensor data:', error);
       
       if (error.code === 'permission-denied') {
-        console.error('🔒 Permission denied - check Firestore security rules');
+        logger.warn(MODULE, 'Permission denied - check Firestore security rules');
       }
       
       return null;
@@ -223,62 +250,54 @@ export class FirebaseService {
   // Get available IoT devices filtered by user's App ID
   static async getAvailableDevices(userAppId = null) {
     try {
-      console.log('🔍 Getting available IoT devices for Application ID:', userAppId);
+      logger.debug(MODULE, 'Getting available IoT devices', { appId: userAppId });
       
-      // Verify Firestore connection first
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
       
-      console.log('📡 Discovering all sensor-data-* collections...');
+      logger.trace(MODULE, 'Discovering all sensor-data-* collections...');
       
-      // Step 1: Discover all sensor-data-* collections dynamically
       const allCollections = await this.discoverCollections();
       const sensorDataCollections = allCollections.filter(name => 
         name.startsWith('sensor-data-')
       );
       
-      console.log(`✅ Found ${sensorDataCollections.length} sensor-data-* collections:`, sensorDataCollections);
+      logger.debug(MODULE, `Found ${sensorDataCollections.length} sensor-data-* collections`);
       
       if (sensorDataCollections.length === 0) {
-        console.log('⚠️ No sensor-data-* collections found');
+        logger.warn(MODULE, 'No sensor-data-* collections found');
         return [];
       }
       
-      // Step 2: Query each collection and extract device information
-      const allDevices = [];
-      const deviceMap = new Map(); // Use Map to avoid duplicates
+      const deviceMap = new Map();
       
       for (const collectionName of sensorDataCollections) {
         try {
-          console.log(`🔎 Querying collection: ${collectionName}`);
+          logger.trace(MODULE, `Querying collection: ${collectionName}`);
           
           const collectionRef = collection(db, collectionName);
-          const q = firestoreQuery(collectionRef, limit(1)); // Get latest document to extract device info
+          const q = firestoreQuery(collectionRef, limit(1));
           const snapshot = await getDocs(q);
           
           if (!snapshot.empty) {
             const latestDoc = snapshot.docs[0];
             const data = latestDoc.data();
             
-            // Extract device ID from collection name or document data
             const deviceId = collectionName.replace('sensor-data-', '') || 
                            data.end_device_ids?.device_id || 
                            data.deviceId;
             
-            // Extract application ID
             const appId = data.end_device_ids?.application_ids?.application_id || 
                          data.applicationId || 
                          data.application_id;
             
-            // Filter by applicationId if provided
             if (userAppId && appId && appId !== userAppId) {
-              console.log(`⏭️ Skipping device ${deviceId} - applicationId mismatch (${appId} !== ${userAppId})`);
+              logger.trace(MODULE, `Skipping device ${deviceId} - applicationId mismatch`);
               continue;
             }
             
-            // Create device object
             const device = {
               id: deviceId,
               deviceId: deviceId,
@@ -286,50 +305,27 @@ export class FirebaseService {
               applicationId: appId,
               lastSeen: data.received_at || data.receivedAt || new Date().toISOString(),
               status: 'active',
-              // Include latest sensor data
               latestData: this.formatSensorData(data)
             };
             
-            // Add to map (prevents duplicates)
             if (!deviceMap.has(deviceId)) {
               deviceMap.set(deviceId, device);
-              console.log(`✅ Added device: ${deviceId} (App ID: ${appId || 'N/A'})`);
+              logger.trace(MODULE, `Added device: ${deviceId}`, { appId: appId || 'N/A' });
             }
           }
         } catch (collectionError) {
-          console.error(`❌ Error querying collection ${collectionName}:`, collectionError.message);
-          // Continue with next collection
+          logger.debug(MODULE, `Error querying collection ${collectionName}:`, collectionError.message);
         }
       }
       
-      // Convert Map to array
       const devices = Array.from(deviceMap.values());
       
-      console.log(`✅ Retrieved ${devices.length} IoT devices from sensor-data-* collections`);
-      console.log('📦 Devices:', devices);
-      
-      if (devices.length === 0) {
-        console.log('⚠️ No IoT devices found in sensor-data-* collections');
-        console.log('💡 Troubleshooting tips:');
-        console.log('   1. Check if sensor-data-* collections have documents');
-        console.log('   2. Verify documents have device identification fields');
-        console.log('   3. If filtering by applicationId, ensure it matches:', userAppId);
-        console.log('   4. Check Firestore security rules allow reading these collections');
-      }
+      logger.info(MODULE, `Retrieved ${devices.length} IoT devices`);
       
       return devices;
       
     } catch (error) {
-      console.error('❌ Error fetching available devices:', error);
-      console.error('Error details:', error.message);
-      console.error('Error code:', error.code);
-      
-      if (error.code === 'permission-denied') {
-        console.error('🔒 Permission denied - check Firestore security rules');
-      } else if (error.code === 'unavailable') {
-        console.error('🌐 Network unavailable - check internet connection');
-      }
-      
+      logger.error(MODULE, 'Error fetching available devices:', error);
       return [];
     }
   }
@@ -337,29 +333,28 @@ export class FirebaseService {
   // Get user's App ID from their profile
   static async getUserAppId(userId) {
     try {
-      console.log('🔍 Getting Application ID for user:', userId);
+      logger.debug(MODULE, 'Getting Application ID for user:', userId);
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         return null;
       }
       
-      // Get user from Firestore 'users' collection
       const userDoc = doc(db, 'users', userId);
       const userSnapshot = await getDoc(userDoc);
       
       if (userSnapshot.exists()) {
         const userData = userSnapshot.data();
         const appId = userData.applicationId || userData.app_id || userData.appId;
-        console.log(`✅ Found Application ID for user ${userId}: ${appId}`);
+        logger.success(MODULE, `Found Application ID for user ${userId}:`, appId);
         return appId;
       }
       
-      console.log('⚠️ User not found or has no Application ID');
+      logger.warn(MODULE, 'User not found or has no Application ID');
       return null;
       
     } catch (error) {
-      console.error('❌ Error fetching user Application ID:', error);
+      logger.error(MODULE, 'Error fetching user Application ID:', error);
       return null;
     }
   }
@@ -367,10 +362,10 @@ export class FirebaseService {
   // Get SmartBins from Firestore
   static async getSmartBins() {
     try {
-      console.log('🔍 Getting SmartBins from Firestore...');
+      logger.debug(MODULE, 'Getting SmartBins from Firestore...');
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
       
@@ -382,15 +377,15 @@ export class FirebaseService {
           id: doc.id,
           ...doc.data()
         }));
-        console.log(`✅ Retrieved ${smartBins.length} SmartBins from Firestore`);
+        logger.info(MODULE, `Retrieved ${smartBins.length} SmartBins`);
         return smartBins;
       }
       
-      console.log('⚠️ No SmartBins found in Firestore');
+      logger.debug(MODULE, 'No SmartBins found in Firestore');
       return [];
       
     } catch (error) {
-      console.error('❌ Error fetching SmartBins:', error);
+      logger.error(MODULE, 'Error fetching SmartBins:', error);
       return [];
     }
   }
@@ -398,10 +393,10 @@ export class FirebaseService {
   // Get SingleBins from Firestore
   static async getSingleBins() {
     try {
-      console.log('🔍 Getting SingleBins from Firestore...');
+      logger.debug(MODULE, 'Getting SingleBins from Firestore...');
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
       
@@ -413,15 +408,15 @@ export class FirebaseService {
           id: doc.id,
           ...doc.data()
         }));
-        console.log(`✅ Retrieved ${singleBins.length} SingleBins from Firestore`);
+        logger.info(MODULE, `Retrieved ${singleBins.length} SingleBins`);
         return singleBins;
       }
       
-      console.log('⚠️ No SingleBins found in Firestore');
+      logger.debug(MODULE, 'No SingleBins found in Firestore');
       return [];
       
     } catch (error) {
-      console.error('❌ Error fetching SingleBins:', error);
+      logger.error(MODULE, 'Error fetching SingleBins:', error);
       return [];
     }
   }
@@ -429,79 +424,70 @@ export class FirebaseService {
   // Get SingleBins with enriched sensor data from linked IoT devices
   static async getSingleBinsWithSensorData() {
     try {
-      console.log('🔍 Getting SingleBins with enriched sensor data...');
+      logger.debug(MODULE, 'Getting SingleBins with enriched sensor data...');
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
       
-      // Get all SingleBins
       const singleBins = await this.getSingleBins();
       
       if (singleBins.length === 0) {
         return [];
       }
       
-      // Enrich each SingleBin with sensor data from its linked IoT device
       const enrichedSingleBins = await Promise.all(
         singleBins.map(async (singleBin) => {
           try {
-            // Check if the SingleBin has a linked IoT device
             const deviceId = singleBin.iot_device_id || singleBin.device_id || singleBin.deviceId;
             
             if (!deviceId) {
-              console.log(`⚠️ SingleBin ${singleBin.id} has no linked IoT device`);
+              logger.trace(MODULE, `SingleBin ${singleBin.id} has no linked IoT device`);
               return singleBin;
             }
             
-            // Get latest sensor data for this device
             const sensorData = await this.getLatestSensorData(deviceId);
             
             if (!sensorData) {
-              console.log(`⚠️ No sensor data found for device ${deviceId}`);
+              logger.trace(MODULE, `No sensor data found for device ${deviceId}`);
               return singleBin;
             }
             
-            // Map sensor data to SingleBin properties
             const enrichedBin = {
               ...singleBin,
-              // Distance & Fill Level
+              sensorValue: sensorData.distance,
+              sensor_value: sensorData.distance,
               distance: sensorData.distance,
               fill_level: sensorData.fillLevel,
               current_fill: sensorData.fillLevel,
-              // Battery
               battery_level: sensorData.battery,
-              // Environmental sensors
               temperature: sensorData.temperature,
               humidity: sensorData.humidity,
-              // Additional sensor data based on enabled sensors
               air_quality: sensorData.raw?.uplink_message?.decoded_payload?.air_quality || 
                           sensorData.raw?.decoded_payload?.air_quality,
               odour_level: sensorData.raw?.uplink_message?.decoded_payload?.odour_level || 
                           sensorData.raw?.decoded_payload?.odour_level,
-              // Tilt/tamper detection
               tilt_status: sensorData.tilt,
-              // Metadata
               last_sensor_update: sensorData.timestamp,
               sensor_data_available: true
             };
             
-            console.log(`✅ Enriched SingleBin ${singleBin.id} with sensor data from ${deviceId}`);
+            logger.success(MODULE, `Enriched SingleBin ${singleBin.id} with sensor data`);
             return enrichedBin;
             
           } catch (error) {
-            console.error(`❌ Error enriching SingleBin ${singleBin.id}:`, error);
-            return singleBin; // Return original bin if enrichment fails
+            logger.error(MODULE, `Error enriching SingleBin ${singleBin.id}:`, error);
+            return singleBin;
           }
         })
       );
       
-      console.log(`✅ Enriched ${enrichedSingleBins.length} SingleBins with sensor data`);
+      logger.info(MODULE, `Enriched ${enrichedSingleBins.length} SingleBins with sensor data`);
       return enrichedSingleBins;
       
     } catch (error) {
-      console.error('❌ Error fetching SingleBins with sensor data:', error);
+      logger.error(MODULE, 'Error fetching SingleBins with sensor data:', error);
       return [];
     }
   }
@@ -509,10 +495,10 @@ export class FirebaseService {
   // Get Compartments from Firestore
   static async getCompartments() {
     try {
-      console.log('🔍 Getting Compartments from Firestore...');
+      logger.debug(MODULE, 'Getting Compartments from Firestore...');
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
       
@@ -524,15 +510,15 @@ export class FirebaseService {
           id: doc.id,
           ...doc.data()
         }));
-        console.log(`✅ Retrieved ${compartments.length} Compartments from Firestore`);
+        logger.info(MODULE, `Retrieved ${compartments.length} Compartments`);
         return compartments;
       }
       
-      console.log('⚠️ No Compartments found in Firestore');
+      logger.debug(MODULE, 'No Compartments found in Firestore');
       return [];
       
     } catch (error) {
-      console.error('❌ Error fetching Compartments:', error);
+      logger.error(MODULE, 'Error fetching Compartments:', error);
       return [];
     }
   }
@@ -540,10 +526,10 @@ export class FirebaseService {
   // Get Alerts from Firestore
   static async getAlerts() {
     try {
-      console.log('🔍 Getting Alerts from Firestore...');
+      logger.debug(MODULE, 'Getting Alerts from Firestore...');
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
       
@@ -560,19 +546,18 @@ export class FirebaseService {
           id: doc.id,
           ...doc.data()
         }));
-        console.log(`✅ Retrieved ${alerts.length} Alerts from Firestore`);
+        logger.info(MODULE, `Retrieved ${alerts.length} Alerts`);
         return alerts;
       }
       
-      console.log('⚠️ No Alerts found in Firestore');
+      logger.debug(MODULE, 'No Alerts found in Firestore');
       return [];
       
     } catch (error) {
-      console.error('❌ Error fetching Alerts:', error);
+      logger.error(MODULE, 'Error fetching Alerts:', error);
       
-      // Try without orderBy if there's an index error
       if (error.code === 'failed-precondition') {
-        console.log('⚡ Retrying without orderBy...');
+        logger.debug(MODULE, 'Retrying without orderBy...');
         try {
           const alertsCollection = collection(db, 'alerts');
           const alertsSnapshot = await getDocs(alertsCollection);
@@ -582,11 +567,11 @@ export class FirebaseService {
               id: doc.id,
               ...doc.data()
             }));
-            console.log(`✅ Retrieved ${alerts.length} Alerts (without ordering)`);
+            logger.info(MODULE, `Retrieved ${alerts.length} Alerts (without ordering)`);
             return alerts;
           }
         } catch (retryError) {
-          console.error('❌ Retry failed:', retryError);
+          logger.error(MODULE, 'Retry failed:', retryError);
         }
       }
       
@@ -597,18 +582,16 @@ export class FirebaseService {
   // Save Alert to Firestore
   static async saveAlert(alertData) {
     try {
-      console.log('💾 Saving Alert to Firestore:', alertData);
+      logger.debug(MODULE, 'Saving Alert to Firestore:', alertData);
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
       
-      // Generate ID if not provided
       const alertId = alertData.id || `alert-${Date.now()}`;
       const alertRef = doc(db, 'alerts', alertId);
       
-      // Prepare data with timestamp
       const dataToSave = {
         ...alertData,
         id: alertId,
@@ -616,44 +599,41 @@ export class FirebaseService {
         created_at: alertData.created_at || new Date().toISOString()
       };
       
-      // Save to Firestore
       await setDoc(alertRef, dataToSave, { merge: true });
       
-      console.log('✅ Alert saved successfully:', alertId);
+      logger.info(MODULE, `Alert saved: ${alertId}`);
       return { id: alertId, ...dataToSave };
       
     } catch (error) {
-      console.error('❌ Error saving Alert:', error);
+      logger.error(MODULE, 'Error saving Alert:', error);
       throw error;
     }
   }
 
-  // Update Alert in Firestore (useful for marking alerts as resolved)
+  // Update Alert in Firestore
   static async updateAlert(alertId, updateData) {
     try {
-      console.log('🔄 Updating Alert in Firestore:', alertId, updateData);
+      logger.debug(MODULE, 'Updating Alert:', alertId);
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
       
       const alertRef = doc(db, 'alerts', alertId);
       
-      // Prepare update data with timestamp
       const dataToUpdate = {
         ...updateData,
         updated_at: new Date().toISOString()
       };
       
-      // Update in Firestore
       await updateDoc(alertRef, dataToUpdate);
       
-      console.log('✅ Alert updated successfully:', alertId);
+      logger.success(MODULE, `Alert updated: ${alertId}`);
       return { id: alertId, ...dataToUpdate };
       
     } catch (error) {
-      console.error('❌ Error updating Alert:', error);
+      logger.error(MODULE, 'Error updating Alert:', error);
       throw error;
     }
   }
@@ -661,45 +641,43 @@ export class FirebaseService {
   // Delete Alert from Firestore
   static async deleteAlert(alertId) {
     try {
-      console.log('🗑️ Deleting Alert from Firestore:', alertId);
+      logger.debug(MODULE, 'Deleting Alert:', alertId);
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
       
-      // Delete the alert document
       const alertRef = doc(db, 'alerts', alertId);
       await deleteDoc(alertRef);
       
-      console.log('✅ Alert deleted successfully');
+      logger.info(MODULE, `Alert deleted: ${alertId}`);
       
     } catch (error) {
-      console.error('❌ Error deleting Alert:', error);
+      logger.error(MODULE, 'Error deleting Alert:', error);
       throw error;
     }
   }
 
   // Subscribe to real-time sensor data updates
   static subscribeToSensorData(deviceId, callback) {
-    console.log(`🔔 Subscribing to real-time updates for device: ${deviceId}`);
+    logger.debug(MODULE, `Subscribing to real-time updates for device: ${deviceId}`);
     
     if (!db) {
-      console.error('❌ Firestore is not initialized');
+      logger.error(MODULE, 'Firestore is not initialized');
       return null;
     }
     
     try {
-      // Subscribe to device-specific collection
       const deviceCollection = `sensor-data-${deviceId}`;
       const deviceCollectionRef = collection(db, deviceCollection);
       const deviceQuery = firestoreQuery(
         deviceCollectionRef,
         orderBy('receivedAt', 'desc'),
-        limit(10)
+        limit(1)
       );
       
-      console.log(`📡 Setting up real-time listener on: ${deviceCollection}`);
+      logger.trace(MODULE, `Setting up real-time listener on: ${deviceCollection}`);
       
       const unsubscribe = onSnapshot(
         deviceQuery,
@@ -709,23 +687,20 @@ export class FirebaseService {
               const data = doc.data();
               return this.formatSensorData(data);
             });
-            console.log(`🔄 Real-time update received: ${sensorData.length} records`);
+            logger.trace(MODULE, `Real-time update received: ${sensorData.length} record(s)`);
             callback(sensorData);
           } else {
-            console.log('⚠️ Real-time update: No data in snapshot');
+            logger.trace(MODULE, 'Real-time update: No data in snapshot');
             callback([]);
           }
         },
         (error) => {
-          console.error('❌ Real-time subscription error:', error);
-          console.error('Error code:', error.code);
-          console.error('Error message:', error.message);
+          logger.error(MODULE, 'Real-time subscription error:', error);
           
           if (error.code === 'failed-precondition') {
-            console.error('💡 Firestore index required. Retrying without orderBy...');
+            logger.debug(MODULE, 'Firestore index required. Retrying without orderBy...');
             
-            // Retry without orderBy
-            const simpleQuery = firestoreQuery(deviceCollectionRef, limit(10));
+            const simpleQuery = firestoreQuery(deviceCollectionRef, limit(1));
             return onSnapshot(simpleQuery, 
               (snapshot) => {
                 if (!snapshot.empty) {
@@ -736,28 +711,28 @@ export class FirebaseService {
                   callback(sensorData);
                 }
               },
-              (err) => console.error('❌ Retry subscription error:', err)
+              (err) => logger.error(MODULE, 'Retry subscription error:', err)
             );
           }
         }
       );
       
-      console.log('✅ Real-time subscription established');
+      logger.success(MODULE, 'Real-time subscription established');
       return unsubscribe;
       
     } catch (error) {
-      console.error('❌ Error setting up real-time subscription:', error);
+      logger.error(MODULE, 'Error setting up real-time subscription:', error);
       return null;
     }
   }
 
   // Get historical sensor data
   static async getHistoricalData(deviceId, limitCount = 100) {
-    console.log(`📊 Getting historical data for device: ${deviceId}`);
+    logger.debug(MODULE, `Getting historical data for device: ${deviceId}`, { limit: limitCount });
     
     try {
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
       
@@ -776,19 +751,18 @@ export class FirebaseService {
           const data = doc.data();
           return this.formatSensorData(data);
         });
-        console.log(`✅ Retrieved ${historicalData.length} historical records`);
+        logger.info(MODULE, `Retrieved ${historicalData.length} historical records`);
         return historicalData;
       }
       
-      console.log('⚠️ No historical data found');
+      logger.debug(MODULE, 'No historical data found');
       return [];
       
     } catch (error) {
-      console.error('❌ Error fetching historical data:', error);
+      logger.error(MODULE, 'Error fetching historical data:', error);
       
-      // Try without orderBy if index error
       if (error.code === 'failed-precondition') {
-        console.log('⚡ Retrying without orderBy...');
+        logger.debug(MODULE, 'Retrying without orderBy...');
         try {
           const deviceCollection = `sensor-data-${deviceId}`;
           const deviceCollectionRef = collection(db, deviceCollection);
@@ -801,11 +775,11 @@ export class FirebaseService {
               const data = doc.data();
               return this.formatSensorData(data);
             });
-            console.log(`✅ Retrieved ${historicalData.length} historical records (unordered)`);
+            logger.info(MODULE, `Retrieved ${historicalData.length} historical records (unordered)`);
             return historicalData;
           }
         } catch (retryError) {
-          console.error('❌ Retry failed:', retryError);
+          logger.error(MODULE, 'Retry failed:', retryError);
         }
       }
       
@@ -815,30 +789,382 @@ export class FirebaseService {
 
   // Format sensor data to consistent structure
   static formatSensorData(data) {
-    // Handle different data structures from Firestore
-    const uplink = data.uplink_message || data.uplinkMessage || data;
-    const decoded = uplink.decoded_payload || uplink.decodedPayload || data;
+    logger.trace(MODULE, 'Formatting sensor data');
     
-    return {
-      deviceId: data.end_device_ids?.device_id || data.deviceId || 'unknown',
-      timestamp: data.received_at || data.receivedAt || new Date().toISOString(),
-      distance: decoded.distance || decoded.Distance || 0,
-      fillLevel: decoded.fillLevel || decoded.FillLevel || 0,
-      battery: decoded.battery || decoded.Battery || 100,
-      tilt: decoded.tilt || decoded.Tilt || 'normal',
-      temperature: decoded.temperature || decoded.Temperature || null,
-      humidity: decoded.humidity || decoded.Humidity || null,
+    const sensorData = data.sensorData || null;
+    const uplink = data.uplink_message || data.uplinkMessage || data;
+    const decoded = uplink.decoded_payload || uplink.decodedPayload || data.decoded_payload || uplink || data;
+    
+    const deviceId = data.end_device_ids?.device_id || 
+                     data.deviceId || 
+                     data.device_id ||
+                     decoded.deviceId ||
+                     decoded.device_id ||
+                     'unknown';
+    
+    const timestamp = data.received_at || 
+                     data.receivedAt || 
+                     data.timestamp ||
+                     decoded.timestamp ||
+                     new Date().toISOString();
+    
+    const distance = sensorData?.distance ||
+                    decoded.distance ||
+                    decoded.Distance || 
+                    decoded.dist ||
+                    data.distance ||
+                    data.Distance ||
+                    null;
+    
+    let fillLevel = sensorData?.fillLevel ||
+                    sensorData?.fill_level ||
+                    decoded.fillLevel || 
+                    decoded.FillLevel || 
+                    decoded.fill_level ||
+                    decoded.fill ||
+                    data.fillLevel ||
+                    data.FillLevel ||
+                    data.fill_level ||
+                    null;
+    
+    if (fillLevel === null && distance !== null) {
+      fillLevel = distance;
+      logger.trace(MODULE, `Mapped distance (${distance}) to fillLevel`);
+    }
+    
+    const battery = sensorData?.battery ||
+                   decoded.battery ||
+                   decoded.Battery || 
+                   decoded.bat ||
+                   decoded.batt ||
+                   data.battery ||
+                   data.Battery ||
+                   null;
+    
+    const temperature = sensorData?.temperature ||
+                       decoded.temperature || 
+                       decoded.Temperature || 
+                       decoded.temp ||
+                       decoded.Temp ||
+                       data.temperature ||
+                       data.Temperature ||
+                       null;
+    
+    const humidity = sensorData?.humidity ||
+                    decoded.humidity || 
+                    decoded.Humidity || 
+                    decoded.hum ||
+                    data.humidity ||
+                    data.Humidity ||
+                    null;
+    
+    const tilt = sensorData?.tilt ||
+                decoded.tilt || 
+                decoded.Tilt || 
+                data.tilt ||
+                'normal';
+    
+    const formattedData = {
+      deviceId,
+      timestamp,
+      distance,
+      fillLevel,
+      battery,
+      tilt,
+      temperature,
+      humidity,
       raw: data
     };
+    
+    logger.trace(MODULE, 'Formatted sensor data:', { 
+      deviceId, 
+      distance, 
+      fillLevel, 
+      battery, 
+      tilt 
+    });
+    
+    if (distance === null && fillLevel === null && battery === null) {
+      logger.warn(MODULE, 'Warning: No distance, fillLevel, or battery found in sensor data');
+    }
+    
+    return formattedData;
   }
 
-  // Save SmartBin to Firestore
+  // ✅ NEW: Monitor bins and automatically create alerts when thresholds are exceeded
+  static async monitorBinsAndCreateAlerts(singleBins, compartments, calculateFillLevel) {
+    logger.debug(MODULE, 'Monitoring bins for threshold violations...');
+    
+    const newAlerts = [];
+    
+    try {
+      // Get existing alerts to avoid duplicates
+      const existingAlerts = await this.getAlerts();
+      
+      // Helper function to check if alert already exists
+      const alertExists = (binId, alertType, severity) => {
+        // Check for recent alerts (within last 30 minutes) with same bin, type, and severity
+        const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+        
+        return existingAlerts.some(alert => 
+          alert.bin_id === binId &&
+          alert.alert_type === alertType &&
+          alert.severity === severity &&
+          alert.status === 'active' &&
+          alert.created_at > thirtyMinutesAgo
+        );
+      };
+
+      // Monitor SingleBins
+      for (const bin of singleBins) {
+        try {
+          const binHeight = bin.bin_height || bin.height || 100;
+          const sensorValue = bin.sensorValue || bin.sensor_value || bin.distance;
+          const threshold = bin.fill_threshold || 90;
+          
+          if (!sensorValue || !binHeight) {
+            logger.trace(MODULE, `Skipping bin ${bin.id} - missing sensor data`);
+            continue;
+          }
+          
+          const fillPercentage = calculateFillLevel(sensorValue, binHeight);
+          
+          logger.trace(MODULE, `Checking bin ${bin.name}: ${fillPercentage}% (threshold: ${threshold}%)`);
+          
+          // Progressive severity levels
+          let severity = null;
+          if (fillPercentage >= 95) {
+            severity = 'critical';
+          } else if (fillPercentage >= threshold) {
+            severity = 'high';
+          } else if (fillPercentage >= threshold - 5) {
+            severity = 'medium';
+          }
+          
+          // Create alert if threshold exceeded and no recent alert exists
+          if (severity && !alertExists(bin.id, 'fill_level', severity)) {
+            // Auto-resolve lower severity alerts when upgrading to higher severity
+            if (severity === 'critical') {
+              await this.autoResolveAlertsForBin(bin.id, ['high', 'medium']);
+            } else if (severity === 'high') {
+              await this.autoResolveAlertsForBin(bin.id, ['medium']);
+            }
+            
+            const alert = {
+              id: `alert-${bin.id}-fill-${severity}-${Date.now()}`,
+              bin_id: bin.id,
+              binName: bin.name || `Bin ${bin.id}`,
+              binType: 'SingleBin',
+              alert_type: 'fill_level',
+              severity: severity,
+              message: `${bin.name || 'Bin'} has reached ${fillPercentage}% capacity`,
+              currentValue: fillPercentage,
+              threshold: threshold,
+              unit: '%',
+              status: 'active',
+              acknowledged: false,
+              location: bin.location || 'Unknown',
+              created_at: new Date().toISOString(),
+              timestamp: new Date().toISOString()
+            };
+            
+            await this.saveAlert(alert);
+            newAlerts.push(alert);
+            
+            logger.info(MODULE, `🚨 Created ${severity} fill level alert for SingleBin: ${bin.name} (${fillPercentage}%)`);
+          }
+          
+        } catch (error) {
+          logger.error(MODULE, `Error monitoring bin ${bin.id}:`, error);
+        }
+      }
+      
+      // Monitor Compartments
+      for (const compartment of compartments) {
+        try {
+          const binHeight = compartment.bin_height || compartment.height || 100;
+          const sensorValue = compartment.sensorValue || compartment.sensor_value || compartment.distance;
+          const threshold = compartment.fill_threshold || 90;
+          
+          if (!sensorValue || !binHeight) {
+            logger.trace(MODULE, `Skipping compartment ${compartment.id} - missing sensor data`);
+            continue;
+          }
+          
+          const fillPercentage = calculateFillLevel(sensorValue, binHeight);
+          
+          logger.trace(MODULE, `Checking compartment ${compartment.label}: ${fillPercentage}% (threshold: ${threshold}%)`);
+          
+          // Progressive severity levels
+          let severity = null;
+          if (fillPercentage >= 95) {
+            severity = 'critical';
+          } else if (fillPercentage >= threshold) {
+            severity = 'high';
+          } else if (fillPercentage >= threshold - 5) {
+            severity = 'medium';
+          }
+          
+          // Create alert if threshold exceeded and no recent alert exists
+          if (severity && !alertExists(compartment.id, 'fill_level', severity)) {
+            // Auto-resolve lower severity alerts when upgrading to higher severity
+            if (severity === 'critical') {
+              await this.autoResolveAlertsForBin(compartment.id, ['high', 'medium']);
+            } else if (severity === 'high') {
+              await this.autoResolveAlertsForBin(compartment.id, ['medium']);
+            }
+            
+            const alert = {
+              id: `alert-${compartment.id}-fill-${severity}-${Date.now()}`,
+              compartment_id: compartment.id,
+              binName: compartment.label || `Compartment ${compartment.id}`,
+              binType: 'Compartment',
+              alert_type: 'fill_level',
+              severity: severity,
+              message: `${compartment.label || 'Compartment'} has reached ${fillPercentage}% capacity`,
+              currentValue: fillPercentage,
+              threshold: threshold,
+              unit: '%',
+              status: 'active',
+              acknowledged: false,
+              location: compartment.location || 'Unknown',
+              created_at: new Date().toISOString(),
+              timestamp: new Date().toISOString()
+            };
+            
+            await this.saveAlert(alert);
+            newAlerts.push(alert);
+            
+            logger.info(MODULE, `🚨 Created ${severity} fill level alert for Compartment: ${compartment.label} (${fillPercentage}%)`);
+          }
+          
+        } catch (error) {
+          logger.error(MODULE, `Error monitoring compartment ${compartment.id}:`, error);
+        }
+      }
+      
+      if (newAlerts.length > 0) {
+        logger.success(MODULE, `✅ Created ${newAlerts.length} new alert(s)`);
+      } else {
+        logger.trace(MODULE, 'No new alerts needed');
+      }
+      
+      return newAlerts;
+      
+    } catch (error) {
+      logger.error(MODULE, 'Error in alert monitoring:', error);
+      return [];
+    }
+  }
+
+  // ✅ NEW: Auto-resolve alerts that are no longer relevant
+  static async autoResolveAlerts(singleBins, compartments, calculateFillLevel) {
+    logger.debug(MODULE, 'Checking for alerts to auto-resolve...');
+    
+    try {
+      const existingAlerts = await this.getAlerts();
+      const activeAlerts = existingAlerts.filter(alert => alert.status === 'active');
+      
+      let resolvedCount = 0;
+      
+      for (const alert of activeAlerts) {
+        try {
+          // Find the bin/compartment for this alert
+          let bin = null;
+          let fillPercentage = 0;
+          
+          if (alert.bin_id) {
+            bin = singleBins.find(b => b.id === alert.bin_id);
+            if (bin) {
+              const binHeight = bin.bin_height || bin.height || 100;
+              const sensorValue = bin.sensorValue || bin.sensor_value || bin.distance;
+              if (sensorValue && binHeight) {
+                fillPercentage = calculateFillLevel(sensorValue, binHeight);
+              }
+            }
+          } else if (alert.compartment_id) {
+            bin = compartments.find(c => c.id === alert.compartment_id);
+            if (bin) {
+              const binHeight = bin.bin_height || bin.height || 100;
+              const sensorValue = bin.sensorValue || bin.sensor_value || bin.distance;
+              if (sensorValue && binHeight) {
+                fillPercentage = calculateFillLevel(sensorValue, binHeight);
+              }
+            }
+          }
+          
+          if (!bin) {
+            logger.trace(MODULE, `Bin not found for alert ${alert.id}, skipping`);
+            continue;
+          }
+          
+          // Auto-resolve if fill level has dropped below threshold - 10%
+          const threshold = bin.fill_threshold || 90;
+          const resolveThreshold = threshold - 10;
+          
+          if (fillPercentage < resolveThreshold) {
+            await this.updateAlert(alert.id, {
+              status: 'resolved',
+              resolved_at: new Date().toISOString(),
+              resolution_type: 'auto',
+              resolution_note: `Fill level dropped to ${fillPercentage}% (below ${resolveThreshold}%)`
+            });
+            
+            resolvedCount++;
+            logger.info(MODULE, `✅ Auto-resolved alert for ${alert.binName}: ${fillPercentage}% < ${resolveThreshold}%`);
+          }
+          
+        } catch (error) {
+          logger.error(MODULE, `Error auto-resolving alert ${alert.id}:`, error);
+        }
+      }
+      
+      if (resolvedCount > 0) {
+        logger.success(MODULE, `✅ Auto-resolved ${resolvedCount} alert(s)`);
+      } else {
+        logger.trace(MODULE, 'No alerts needed auto-resolution');
+      }
+      
+    } catch (error) {
+      logger.error(MODULE, 'Error in auto-resolve alerts:', error);
+    }
+  }
+
+  // ✅ Helper: Auto-resolve specific severity alerts for a bin (used when upgrading alert severity)
+  static async autoResolveAlertsForBin(binId, severities) {
+    logger.debug(MODULE, `Auto-resolving ${severities.join(', ')} alerts for bin ${binId}`);
+    
+    try {
+      const existingAlerts = await this.getAlerts();
+      
+      for (const alert of existingAlerts) {
+        if (
+          (alert.bin_id === binId || alert.compartment_id === binId) &&
+          alert.status === 'active' &&
+          severities.includes(alert.severity)
+        ) {
+          await this.updateAlert(alert.id, {
+            status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            resolution_type: 'auto',
+            resolution_note: 'Alert severity upgraded to higher level'
+          });
+          
+          logger.success(MODULE, `✅ Auto-resolved ${alert.severity} alert (upgraded to critical): ${alert.id}`);
+        }
+      }
+    } catch (error) {
+      logger.error(MODULE, 'Error auto-resolving alerts for bin:', error);
+    }
+  }
+
+  // ✅ Save SmartBin to Firestore
   static async saveSmartBin(smartBinData) {
     try {
-      console.log('💾 Saving SmartBin to Firestore:', smartBinData);
+      logger.debug(MODULE, 'Saving SmartBin to Firestore:', smartBinData);
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
       
@@ -860,11 +1186,11 @@ export class FirebaseService {
       const binRef = doc(db, 'smart-bins', binId);
       await setDoc(binRef, smartBinPayload, { merge: true });
       
-      console.log('✅ SmartBin saved successfully:', binId);
+      logger.success(MODULE, `SmartBin saved successfully: ${binId}`);
       
       // If compartments are included, save them separately to the compartments collection
       if (compartments.length > 0) {
-        console.log(`📦 Saving ${compartments.length} compartments to compartments collection...`);
+        logger.debug(MODULE, `Saving ${compartments.length} compartments to compartments collection...`);
         
         const compartmentSavePromises = compartments.map(async (comp) => {
           // Generate compartment ID if needed (or update existing)
@@ -885,12 +1211,12 @@ export class FirebaseService {
           const compartmentRef = doc(db, 'compartments', compartmentId);
           await setDoc(compartmentRef, compartmentPayload, { merge: true });
           
-          console.log(`✅ Compartment saved: ${compartmentId} (${comp.name})`);
+          logger.trace(MODULE, `Compartment saved: ${compartmentId} (${comp.name})`);
           return compartmentPayload;
         });
         
         const savedCompartments = await Promise.all(compartmentSavePromises);
-        console.log(`✅ All ${savedCompartments.length} compartments saved successfully`);
+        logger.success(MODULE, `All ${savedCompartments.length} compartments saved successfully`);
         
         // Return the SmartBin with the saved compartments
         return { 
@@ -902,18 +1228,18 @@ export class FirebaseService {
       return smartBinPayload;
       
     } catch (error) {
-      console.error('❌ Error saving SmartBin:', error);
+      logger.error(MODULE, 'Error saving SmartBin:', error);
       throw error;
     }
   }
 
-  // Save SingleBin to Firestore
+  // ✅ Save SingleBin to Firestore
   static async saveSingleBin(singleBinData) {
     try {
-      console.log('💾 Saving SingleBin to Firestore:', singleBinData);
+      logger.debug(MODULE, 'Saving SingleBin to Firestore:', singleBinData);
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
       
@@ -932,22 +1258,22 @@ export class FirebaseService {
       // Save to Firestore
       await setDoc(binRef, dataToSave, { merge: true });
       
-      console.log('✅ SingleBin saved successfully:', binId);
+      logger.success(MODULE, `SingleBin saved successfully: ${binId}`);
       return { id: binId, ...dataToSave };
       
     } catch (error) {
-      console.error('❌ Error saving SingleBin:', error);
+      logger.error(MODULE, 'Error saving SingleBin:', error);
       throw error;
     }
   }
 
-  // Save Compartment to Firestore
+  // ✅ Save Compartment to Firestore
   static async saveCompartment(compartmentData) {
     try {
-      console.log('💾 Saving Compartment to Firestore:', compartmentData);
+      logger.debug(MODULE, 'Saving Compartment to Firestore:', compartmentData);
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
       
@@ -966,22 +1292,22 @@ export class FirebaseService {
       // Save to Firestore
       await setDoc(compartmentRef, dataToSave, { merge: true });
       
-      console.log('✅ Compartment saved successfully:', compartmentId);
+      logger.success(MODULE, `Compartment saved successfully: ${compartmentId}`);
       return { id: compartmentId, ...dataToSave };
       
     } catch (error) {
-      console.error('❌ Error saving Compartment:', error);
+      logger.error(MODULE, 'Error saving Compartment:', error);
       throw error;
     }
   }
 
-  // Delete SmartBin from Firestore
+  // ✅ Delete SmartBin from Firestore
   static async deleteSmartBin(binId) {
     try {
-      console.log('🗑️ Deleting SmartBin from Firestore:', binId);
+      logger.debug(MODULE, 'Deleting SmartBin from Firestore:', binId);
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
       
@@ -1001,21 +1327,21 @@ export class FirebaseService {
       const deletePromises = compartmentsSnapshot.docs.map(doc => deleteDoc(doc.ref));
       await Promise.all(deletePromises);
       
-      console.log(`✅ SmartBin and ${compartmentsSnapshot.size} compartments deleted successfully`);
+      logger.info(MODULE, `SmartBin and ${compartmentsSnapshot.size} compartments deleted successfully`);
       
     } catch (error) {
-      console.error('❌ Error deleting SmartBin:', error);
+      logger.error(MODULE, 'Error deleting SmartBin:', error);
       throw error;
     }
   }
 
-  // Delete SingleBin from Firestore
+  // ✅ Delete SingleBin from Firestore
   static async deleteSingleBin(binId) {
     try {
-      console.log('🗑️ Deleting SingleBin from Firestore:', binId);
+      logger.debug(MODULE, 'Deleting SingleBin from Firestore:', binId);
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
       
@@ -1023,21 +1349,21 @@ export class FirebaseService {
       const binRef = doc(db, 'single-bins', binId);
       await deleteDoc(binRef);
       
-      console.log('✅ SingleBin deleted successfully');
+      logger.info(MODULE, 'SingleBin deleted successfully');
       
     } catch (error) {
-      console.error('❌ Error deleting SingleBin:', error);
+      logger.error(MODULE, 'Error deleting SingleBin:', error);
       throw error;
     }
   }
 
-  // Delete Compartment from Firestore
+  // ✅ Delete Compartment from Firestore
   static async deleteCompartment(compartmentId) {
     try {
-      console.log('🗑️ Deleting Compartment from Firestore:', compartmentId);
+      logger.debug(MODULE, 'Deleting Compartment from Firestore:', compartmentId);
       
       if (!db) {
-        console.error('❌ Firestore is not initialized');
+        logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
       
@@ -1045,10 +1371,10 @@ export class FirebaseService {
       const compartmentRef = doc(db, 'compartments', compartmentId);
       await deleteDoc(compartmentRef);
       
-      console.log('✅ Compartment deleted successfully');
+      logger.info(MODULE, 'Compartment deleted successfully');
       
     } catch (error) {
-      console.error('❌ Error deleting Compartment:', error);
+      logger.error(MODULE, 'Error deleting Compartment:', error);
       throw error;
     }
   }

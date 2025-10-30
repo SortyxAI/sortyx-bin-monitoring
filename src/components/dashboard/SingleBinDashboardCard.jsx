@@ -94,15 +94,18 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick }) {
   // Separate sensor data collection - excluding fill level
   const compartmentSensorData = [];
   
-  // Battery sensor - ALWAYS show, default to 0% if offline or no data
+  // ✅ FIX: Battery sensor - Show as ACTIVE if battery_level has valid data
   if (singleBin.sensors_enabled?.battery_level) {
-    const isOnline = singleBin.status === 'active' && 
-                     singleBin.last_sensor_update && 
-                     (Date.now() - new Date(singleBin.last_sensor_update).getTime()) < 60000;
+    // Check if we have valid battery data (not null, not undefined, and not 0 when it shouldn't be)
+    const hasBatteryData = singleBin.battery_level !== undefined && 
+                           singleBin.battery_level !== null;
     
-    const batteryValue = (isOnline && singleBin.battery_level !== undefined) 
-      ? singleBin.battery_level 
-      : 0; // Default to 0% when offline or no data
+    // Determine if sensor is online based on data availability
+    const isOnline = hasBatteryData && 
+                     singleBin.status === 'active' && 
+                     singleBin.sensor_data_available !== false;
+    
+    const batteryValue = hasBatteryData ? singleBin.battery_level : 0;
     
     compartmentSensorData.push({
       type: 'battery',
@@ -164,8 +167,10 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick }) {
     });
   }
 
-  const isLiveActive = singleBin.last_sensor_update && 
-    (Date.now() - new Date(singleBin.last_sensor_update).getTime()) < 60000;
+  // ✅ FIX: Determine if sensors are live based on data availability
+  const isLiveActive = (singleBin.sensor_data_available !== false && singleBin.status === 'active') ||
+                       (singleBin.last_sensor_update && 
+                        (Date.now() - new Date(singleBin.last_sensor_update).getTime()) < 300000); // 5 minutes
 
   return (
     <motion.div
@@ -285,6 +290,34 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick }) {
 
           {/* Layer 3: Fill Level Section - ONLY FILL LEVEL */}
           <div className="bg-gradient-to-r from-slate-50 to-indigo-50 dark:from-purple-900/50 dark:to-indigo-900/50 rounded-xl p-4 mb-4 border border-indigo-200 dark:border-indigo-700">
+            {/* ✅ NEW: LIVE Badge at top of Fill Level section */}
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Fill Level Status</span>
+              <motion.div
+                className="flex items-center gap-1"
+                animate={isLiveActive ? {
+                  scale: [1, 1.1, 1],
+                  opacity: [1, 0.7, 1]
+                } : {}}
+                transition={isLiveActive ? {
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                } : {}}
+              >
+                <Wifi className={`w-3 h-3 ${isLiveActive ? 'text-green-500' : 'text-gray-400'}`} />
+                <Badge 
+                  className={`text-[9px] px-1.5 py-0.5 ${
+                    isLiveActive 
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' 
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                  }`}
+                >
+                  {isLiveActive ? 'LIVE' : 'OFFLINE'}
+                </Badge>
+              </motion.div>
+            </div>
+            
             <div className="flex items-center gap-4 mb-3">
               <SingleBinPieChart singleBin={singleBin} />
               <div className="flex-1">
@@ -343,29 +376,7 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick }) {
                     <p className="text-[10px] text-gray-500 dark:text-gray-400">Real-time sensor monitoring</p>
                   </div>
                 </div>
-                <motion.div
-                  className="flex items-center gap-1"
-                  animate={isLiveActive ? {
-                    scale: [1, 1.1, 1],
-                    opacity: [1, 0.7, 1]
-                  } : {}}
-                  transition={isLiveActive ? {
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  } : {}}
-                >
-                  <Wifi className={`w-3 h-3 ${isLiveActive ? 'text-green-500' : 'text-gray-400'}`} />
-                  <Badge 
-                    className={`text-[9px] px-1.5 py-0.5 ${
-                      isLiveActive 
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' 
-                        : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                    }`}
-                  >
-                    {isLiveActive ? 'LIVE' : 'OFFLINE'}
-                  </Badge>
-                </motion.div>
+                {/* ✅ REMOVED: LIVE badge from here - now in Fill Level section */}
               </div>
 
               {/* Sensor Grid - Dynamic Layout based on count */}

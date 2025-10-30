@@ -63,25 +63,223 @@ export default function Dashboard() {
     console.log('Setting up Firebase real-time subscription...');
     setFirebaseError(null);
     
+    // ✅ FIX: Collect device IDs from BOTH singleBins AND compartments
+    const singleBinDeviceIds = singleBins
+      .map(bin => bin.iot_device_id || bin.device_id || bin.deviceId)
+      .filter(Boolean);
+    
+    const compartmentDeviceIds = compartments
+      .map(comp => comp.iot_device_id || comp.device_id || comp.deviceId)
+      .filter(Boolean);
+    
+    // Combine and deduplicate device IDs
+    const deviceIds = [...new Set([...singleBinDeviceIds, ...compartmentDeviceIds])];
+    
+    if (deviceIds.length === 0) {
+      console.log('⚠️ No devices to subscribe to');
+      return;
+    }
+    
+    console.log(`📡 Subscribing to ${deviceIds.length} device(s):`, deviceIds);
+    console.log(`   - SingleBins: ${singleBinDeviceIds.length} devices`);
+    console.log(`   - Compartments: ${compartmentDeviceIds.length} devices`);
+    
     try {
-      const unsubscribe = FirebaseService.subscribeToSensorData('sortyx-sensor-two', (sensorData) => {
-        console.log('Real-time sensor data received:', sensorData);
-        setRealTimeData(sensorData);
-        setIsConnectedToFirebase(true);
-        setFirebaseError(null);
+      // Subscribe to all devices
+      const unsubscribers = deviceIds.map(deviceId => {
+        return FirebaseService.subscribeToSensorData(deviceId, (sensorData) => {
+          console.log(`Real-time sensor data received for ${deviceId}:`, sensorData);
+          setRealTimeData(sensorData);
+          setIsConnectedToFirebase(true);
+          setFirebaseError(null);
+        });
       });
 
       return () => {
-        if (unsubscribe) {
-          unsubscribe();
-        }
+        // Cleanup all subscriptions
+        unsubscribers.forEach(unsubscribe => {
+          if (unsubscribe) {
+            unsubscribe();
+          }
+        });
       };
     } catch (error) {
       console.error('Firebase subscription error:', error);
       setFirebaseError(error.message);
       setIsConnectedToFirebase(false);
     }
-  }, []);
+  }, [singleBins, compartments]); // ✅ FIX: Re-subscribe when singleBins OR compartments change
+
+  // Sync real-time sensor data with SingleBins
+  useEffect(() => {
+    if (!realTimeData || realTimeData.length === 0) {
+      return;
+    }
+
+    console.log('🔄 Syncing real-time sensor data with SingleBins...');
+    
+    // Update singleBins with the latest sensor data
+    setSingleBins(prevBins => {
+      return prevBins.map(bin => {
+        // Get the device ID from the bin
+        const deviceId = bin.iot_device_id || bin.device_id || bin.deviceId;
+        
+        if (!deviceId) {
+          return bin; // No device linked, skip
+        }
+        
+        // Find matching sensor data (realTimeData is an array)
+        const latestSensorData = Array.isArray(realTimeData) 
+          ? realTimeData.find(data => data.deviceId === deviceId) || realTimeData[0]
+          : realTimeData;
+        
+        if (!latestSensorData || latestSensorData.deviceId !== deviceId) {
+          return bin; // No matching data
+        }
+        
+        console.log(`✅ Updating bin ${bin.name} with sensor data from ${deviceId}`, latestSensorData);
+        
+        // Merge sensor data into the bin
+        return {
+          ...bin,
+          // ✅ FIX: Map distance to sensor_value for fill level calculation
+          sensorValue: latestSensorData.distance ?? bin.sensorValue,
+          sensor_value: latestSensorData.distance ?? bin.sensor_value,
+          // Distance & Fill Level
+          distance: latestSensorData.distance ?? bin.distance,
+          fill_level: latestSensorData.fillLevel ?? bin.fill_level,
+          current_fill: latestSensorData.fillLevel ?? bin.current_fill,
+          // Battery
+          battery_level: latestSensorData.battery ?? bin.battery_level,
+          // Environmental sensors
+          temperature: latestSensorData.temperature ?? bin.temperature,
+          humidity: latestSensorData.humidity ?? bin.humidity,
+          // Additional sensor data
+          air_quality: latestSensorData.raw?.uplink_message?.decoded_payload?.air_quality || 
+                      latestSensorData.raw?.decoded_payload?.air_quality ||
+                      bin.air_quality,
+          odour_level: latestSensorData.raw?.uplink_message?.decoded_payload?.odour_level || 
+                      latestSensorData.raw?.decoded_payload?.odour_level ||
+                      bin.odour_level,
+          // Tilt/tamper detection
+          tilt_status: latestSensorData.tilt ?? bin.tilt_status,
+          // Update metadata
+          last_sensor_update: latestSensorData.timestamp || new Date().toISOString(),
+          sensor_data_available: true
+        };
+      });
+    });
+  }, [realTimeData]); // Re-run whenever realTimeData changes
+
+  // ✅ NEW: Sync real-time sensor data with Compartments
+  useEffect(() => {
+    if (!realTimeData || realTimeData.length === 0) {
+      return;
+    }
+
+    console.log('🔄 Syncing real-time sensor data with Compartments...');
+    
+    // Update compartments with the latest sensor data
+    setCompartments(prevCompartments => {
+      return prevCompartments.map(compartment => {
+        const deviceId = compartment.iot_device_id || compartment.device_id || compartment.deviceId;
+        
+        if (!deviceId) {
+          return compartment;
+        }
+        
+        const latestSensorData = Array.isArray(realTimeData) 
+          ? realTimeData.find(data => data.deviceId === deviceId) || realTimeData[0]
+          : realTimeData;
+        
+        if (!latestSensorData || latestSensorData.deviceId !== deviceId) {
+          return compartment;
+        }
+        
+        console.log(`✅ Updating compartment ${compartment.label || compartment.name} with sensor data from ${deviceId}`, latestSensorData);
+        
+        return {
+          ...compartment,
+          sensorValue: latestSensorData.distance ?? compartment.sensorValue,
+          sensor_value: latestSensorData.distance ?? compartment.sensor_value,
+          distance: latestSensorData.distance ?? compartment.distance,
+          fill_level: latestSensorData.fillLevel ?? compartment.fill_level,
+          current_fill: latestSensorData.fillLevel ?? compartment.current_fill,
+          battery_level: latestSensorData.battery ?? compartment.battery_level,
+          temperature: latestSensorData.temperature ?? compartment.temperature,
+          humidity: latestSensorData.humidity ?? compartment.humidity,
+          air_quality: latestSensorData.raw?.uplink_message?.decoded_payload?.air_quality || 
+                      latestSensorData.raw?.decoded_payload?.air_quality ||
+                      compartment.air_quality,
+          odour_level: latestSensorData.raw?.uplink_message?.decoded_payload?.odour_level || 
+                      latestSensorData.raw?.decoded_payload?.odour_level ||
+                      compartment.odour_level,
+          tilt_status: latestSensorData.tilt ?? compartment.tilt_status,
+          last_sensor_update: latestSensorData.timestamp || new Date().toISOString(),
+          sensor_data_available: true
+        };
+      });
+    });
+  }, [realTimeData]); // Re-run whenever realTimeData changes
+
+  // ✅ NEW: Monitor bins and auto-create alerts when thresholds are exceeded
+  useEffect(() => {
+    // Only run if we have bins and compartments loaded
+    if ((singleBins.length === 0 && compartments.length === 0) || loading) {
+      return;
+    }
+
+    console.log('🚨 Setting up automatic alert monitoring...');
+
+    // Helper function to calculate fill level (imported from utils)
+    const calculateFillLevelHelper = (sensorValue, binHeight) => {
+      if (!sensorValue || !binHeight || binHeight === 0) return 0;
+      const fillLevel = ((binHeight - sensorValue) / binHeight) * 100;
+      return Math.max(0, Math.min(100, Math.round(fillLevel)));
+    };
+
+    // Initial monitoring check
+    const checkAndCreateAlerts = async () => {
+      try {
+        // Monitor bins and create alerts
+        const newAlerts = await FirebaseService.monitorBinsAndCreateAlerts(
+          singleBins,
+          compartments,
+          calculateFillLevelHelper
+        );
+
+        // If new alerts were created, reload alerts to show them
+        if (newAlerts.length > 0) {
+          const updatedAlerts = await FirebaseService.getAlerts();
+          setAlerts(updatedAlerts);
+          console.log(`✅ Dashboard alerts updated - ${newAlerts.length} new alert(s) added`);
+        }
+
+        // Auto-resolve alerts that are no longer needed
+        await FirebaseService.autoResolveAlerts(
+          singleBins,
+          compartments,
+          calculateFillLevelHelper
+        );
+
+      } catch (error) {
+        console.error('❌ Error in alert monitoring:', error);
+      }
+    };
+
+    // Run initial check
+    checkAndCreateAlerts();
+
+    // Set up interval to check every 60 seconds
+    const alertMonitoringInterval = setInterval(() => {
+      checkAndCreateAlerts();
+    }, 60000); // Check every 60 seconds
+
+    return () => {
+      clearInterval(alertMonitoringInterval);
+      console.log('🛑 Alert monitoring stopped');
+    };
+  }, [singleBins, compartments, loading]); // Re-run when bins/compartments change
 
   useEffect(() => {
     let isMounted = true;
@@ -934,15 +1132,9 @@ export default function Dashboard() {
                 <CardContent className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600 dark:text-purple-200">Overall Status</span>
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: 0.9 }}
-                    >
-                      <Badge className="bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300">
-                        Excellent
-                      </Badge>
-                    </motion.div>
+                    <Badge className="bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300">
+                      Excellent
+                    </Badge>
                   </div>
                   
                   <div className="flex justify-between items-center">
