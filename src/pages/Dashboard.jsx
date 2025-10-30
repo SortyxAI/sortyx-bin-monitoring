@@ -270,10 +270,11 @@ export default function Dashboard() {
     // Run initial check
     checkAndCreateAlerts();
 
-    // Set up interval to check every 60 seconds
+    // ✅ FIX: Set up interval to check every 5 minutes (300 seconds) instead of 60 seconds
+    // This prevents excessive alert generation and relies on the locking mechanism in FirebaseService
     const alertMonitoringInterval = setInterval(() => {
       checkAndCreateAlerts();
-    }, 60000); // Check every 60 seconds
+    }, 300000); // Check every 5 minutes (300 seconds)
 
     return () => {
       clearInterval(alertMonitoringInterval);

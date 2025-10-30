@@ -512,14 +512,14 @@ export default function Alerts() {
                         </div>
                       </div>
 
-                      {!alert.acknowledged && alert.status === 'active' && (
+                      {!alert.acknowledged && alert.status === 'active' && (alert.severity === 'critical' || alert.severity === 'high') && (
                         <div className="flex gap-2">
                           <Button
                             size="sm"
                             onClick={() => handleAcknowledge(alert.id)}
                             className={alert.severity === 'critical' 
                               ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg'
-                              : 'bg-green-600 hover:bg-green-700'
+                              : 'bg-orange-600 hover:bg-orange-700 text-white'
                             }
                           >
                             <Check className="w-4 h-4 mr-1" />
