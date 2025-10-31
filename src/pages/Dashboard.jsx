@@ -48,6 +48,10 @@ export default function Dashboard() {
   // Collapsible states
   const [singleBinSectionExpanded, setSingleBinSectionExpanded] = useState(true);
   const [smartBinSectionExpanded, setSmartBinSectionExpanded] = useState(true);
+  
+  // ✅ NEW: Individual SingleBin card expanded states
+  const [singleBinExpandedStates, setSingleBinExpandedStates] = useState({});
+  const [allSingleBinsExpanded, setAllSingleBinsExpanded] = useState(false); // ✅ Changed to false for collapsed default
 
   // Bin details modal states
   const [showBinDetails, setShowBinDetails] = useState(false);
@@ -463,6 +467,22 @@ export default function Dashboard() {
     };
   }, []);
 
+  // ✅ UPDATED: Initialize expanded states as collapsed (false) by default
+  useEffect(() => {
+    if (singleBins.length > 0) {
+      // Initialize all bins as collapsed by default
+      const initialStates = {};
+      singleBins.forEach(bin => {
+        if (singleBinExpandedStates[bin.id] === undefined) {
+          initialStates[bin.id] = false; // ✅ Changed to false for collapsed default
+        }
+      });
+      if (Object.keys(initialStates).length > 0) {
+        setSingleBinExpandedStates(prev => ({ ...prev, ...initialStates }));
+      }
+    }
+  }, [singleBins.length]);
+
   // Handle bin card click to show details
   const handleBinCardClick = (bin, type) => {
     console.log('Dashboard bin card clicked:', bin, type);
@@ -495,6 +515,27 @@ export default function Dashboard() {
     } catch (error) {
       console.error("Error saving bin order:", error);
     }
+  };
+
+  // ✅ NEW: Toggle individual SingleBin card
+  const handleToggleSingleBin = (binId) => {
+    setSingleBinExpandedStates(prev => ({
+      ...prev,
+      [binId]: !prev[binId]
+    }));
+  };
+
+  // ✅ NEW: Toggle all SingleBin cards
+  const handleToggleAllSingleBins = () => {
+    const newExpandedState = !allSingleBinsExpanded;
+    setAllSingleBinsExpanded(newExpandedState);
+    
+    // Update all individual states
+    const newStates = {};
+    singleBins.forEach(bin => {
+      newStates[bin.id] = newExpandedState;
+    });
+    setSingleBinExpandedStates(newStates);
   };
 
   const orderedSmartBins = smartBinOrder
@@ -622,52 +663,6 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Firebase Connection Status */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-4 flex items-center gap-3 flex-wrap"
-      >
-        <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium shadow-lg ${
-          isConnectedToFirebase 
-            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border border-green-200 dark:border-green-700' 
-            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-700'
-        }`}>
-          <motion.div
-            className={`w-3 h-3 rounded-full mr-2 ${
-              isConnectedToFirebase ? 'bg-green-500' : 'bg-red-500'
-            }`}
-            animate={isConnectedToFirebase ? { 
-              scale: [1, 1.2, 1],
-              opacity: [1, 0.7, 1]
-            } : {}}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-          {isConnectedToFirebase ? 'Connected to IoT Network' : 'Connecting to IoT Network...'}
-          {firebaseError && <span className="ml-2 text-xs">({firebaseError})</span>}
-        </div>
-
-        {/* Demo Phase Indicator */}
-        {testDataEnabled && demoPhaseInfo && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/40 dark:to-indigo-900/40 text-purple-800 dark:text-purple-200 border-2 border-purple-300 dark:border-purple-600"
-          >
-            <motion.div
-              className="w-3 h-3 rounded-full mr-2 bg-gradient-to-r from-purple-500 to-indigo-500"
-              animate={{ 
-                scale: [1, 1.3, 1],
-                rotate: [0, 180, 360]
-              }}
-              transition={{ duration: 2, repeat: Infinity }}
-            />
-            <span className="font-semibold">Phase {demoPhaseInfo.phase + 1}/4:</span>
-            <span className="ml-1">{demoPhaseInfo.phaseName}</span>
-          </motion.div>
-        )}
-      </motion.div>
-
       {/* Demo Phase Description Banner */}
       {testDataEnabled && demoPhaseInfo && (
         <motion.div
@@ -770,16 +765,17 @@ export default function Dashboard() {
             transition={{ delay: 0.4 }}
           >
             <motion.div
-              className="w-3 h-3 bg-green-500 rounded-full shadow-lg"
-              animate={{ 
-                scale: [1, 1.3, 1],
-                boxShadow: ['0 0 0 0 rgba(34, 197, 94, 0.7)', '0 0 0 10px rgba(34, 197, 94, 0)', '0 0 0 0 rgba(34, 197, 94, 0)']
-              }}
+              className={`w-3 h-3 rounded-full mr-2 ${
+                isConnectedToFirebase ? 'bg-green-500' : 'bg-red-500'
+              }`}
+              animate={isConnectedToFirebase ? { 
+                scale: [1, 1.2, 1],
+                opacity: [1, 0.7, 1]
+              } : {}}
               transition={{ duration: 2, repeat: Infinity }}
             />
-            <span className="text-gray-700 dark:text-purple-200 font-medium">
-              {testDataEnabled ? 'Demo Mode' : 'System Online'}
-            </span>
+            {isConnectedToFirebase ? 'Connected to IoT Network' : 'Connecting to IoT Network...'}
+            {firebaseError && <span className="ml-2 text-xs">({firebaseError})</span>}
           </motion.div>
         </div>
       </motion.div>
@@ -911,6 +907,47 @@ export default function Dashboard() {
                               You've reached the limit of {MAX_FREE_BINS} SingleBins on your free plan. Upgrade to add more!
                             </motion.div>
                           )}
+                          <div className="flex justify-end mb-4">
+                            <motion.button
+                              onClick={handleToggleAllSingleBins}
+                              className="relative px-4 py-2 rounded-lg font-medium text-white text-sm shadow-md overflow-hidden group"
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              {/* Animated gradient background */}
+                              <motion.div
+                                className="absolute inset-0 bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500"
+                                animate={{
+                                  backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+                                }}
+                                transition={{
+                                  duration: 3,
+                                  repeat: Infinity,
+                                  ease: "linear"
+                                }}
+                                style={{
+                                  backgroundSize: '200% 200%'
+                                }}
+                              />
+                              {/* Shine effect */}
+                              <motion.div
+                                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                                animate={{
+                                  x: ['-100%', '100%']
+                                }}
+                                transition={{
+                                  duration: 2,
+                                  repeat: Infinity,
+                                  ease: "linear",
+                                  repeatDelay: 1
+                                }}
+                              />
+                              <span className="relative z-10 flex items-center gap-2">
+                                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${allSingleBinsExpanded ? 'rotate-180' : ''}`} />
+                                {allSingleBinsExpanded ? 'Collapse All' : 'Expand All'}
+                              </span>
+                            </motion.button>
+                          </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <AnimatePresence>
                               {singleBins.map((singleBin, index) => (
@@ -924,6 +961,8 @@ export default function Dashboard() {
                                   <SingleBinDashboardCard 
                                     singleBin={singleBin} 
                                     onCardClick={handleBinCardClick}
+                                    isExpanded={singleBinExpandedStates[singleBin.id]}
+                                    onToggleExpand={() => handleToggleSingleBin(singleBin.id)}
                                   />
                                 </motion.div>
                               ))}
