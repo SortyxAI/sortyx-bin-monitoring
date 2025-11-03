@@ -21,10 +21,31 @@ export default defineConfig({
     extensions: ['.mjs', '.js', '.jsx', '.ts', '.tsx', '.json']
   },
   optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      'framer-motion',
+      'firebase/app',
+      'firebase/auth',
+      'firebase/database',
+      'firebase/firestore',
+      'lucide-react',
+      'recharts',
+    ],
+    exclude: [
+      '@radix-ui/react-navigation-menu',
+    ],
     esbuildOptions: {
       loader: {
         '.js': 'jsx',
       },
     },
+    force: true, // Force re-optimization
   },
-}) 
+  build: {
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
+  },
+})

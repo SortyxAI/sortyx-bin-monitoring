@@ -1007,24 +1007,51 @@ export class FirebaseService {
       // Get existing alerts to check acknowledgment state
       const existingAlerts = await this.getAlerts();
       
-      // Helper function to check acknowledgment state for a bin at a specific level
-      const hasUnacknowledgedAlertAtLevel = (binId, alertType, severity) => {
+      // Helper to check if there's an unacknowledged alert at ANY severity for this bin
+      const hasAnyUnacknowledgedAlert = (binId, alertType) => {
         return existingAlerts.some(alert => 
           (alert.bin_id === binId || alert.compartment_id === binId) &&
           alert.alert_type === alertType &&
-          alert.severity === severity &&
           alert.status === 'active' &&
           !alert.acknowledged
         );
       };
 
-      // Helper function to check if any alert exists for this bin/type/severity
-      const alertExistsForLevel = (binId, alertType, severity) => {
-        return existingAlerts.some(alert => 
+      // Helper to get the highest existing severity level for a bin
+      const getHighestExistingSeverity = (binId, alertType) => {
+        const severityOrder = { 'medium': 1, 'high': 2, 'critical': 3 };
+        const binAlerts = existingAlerts.filter(alert => 
+          (alert.bin_id === binId || alert.compartment_id === binId) &&
+          alert.alert_type === alertType &&
+          alert.status === 'active'
+        );
+        
+        if (binAlerts.length === 0) return null;
+        
+        let highest = null;
+        let highestValue = 0;
+        
+        for (const alert of binAlerts) {
+          const value = severityOrder[alert.severity] || 0;
+          if (value > highestValue) {
+            highestValue = value;
+            highest = alert.severity;
+          }
+        }
+        
+        return highest;
+      };
+
+      // Helper to check if alert was recently acknowledged (reduced to 5 minutes for faster iteration)
+      const wasRecentlyAcknowledged = (binId, alertType, severity) => {
+        return existingAlerts.some(alert =>
           (alert.bin_id === binId || alert.compartment_id === binId) &&
           alert.alert_type === alertType &&
           alert.severity === severity &&
-          alert.status === 'active'
+          alert.status === 'active' &&
+          alert.acknowledged &&
+          alert.acknowledgedAt &&
+          new Date(alert.acknowledgedAt) > new Date(Date.now() - 5 * 60 * 1000) // 5 minutes cooldown
         );
       };
 
@@ -1044,7 +1071,7 @@ export class FirebaseService {
           
           logger.trace(MODULE, `Checking bin ${bin.name}: ${fillPercentage}% (threshold: ${threshold}%)`);
           
-          // Determine current severity level
+          // Determine current severity level based on fill percentage
           let currentSeverity = null;
           if (fillPercentage >= 95) {
             currentSeverity = 'critical';
@@ -1054,49 +1081,29 @@ export class FirebaseService {
             currentSeverity = 'medium';
           }
           
-          // Only create alert if:
-          // 1. There's a threshold violation (currentSeverity is set)
-          // 2. No alert exists at this level OR
-          // 3. Previous alert at this level was acknowledged (allowing reminders) OR
-          // 4. This is an escalation to a higher severity level
-          if (currentSeverity) {
-            const hasUnacknowledgedAtThisLevel = hasUnacknowledgedAlertAtLevel(bin.id, 'fill_level', currentSeverity);
-            const alertExistsAtThisLevel = alertExistsForLevel(bin.id, 'fill_level', currentSeverity);
+          // If no threshold violation, skip
+          if (!currentSeverity) {
+            continue;
+          }
+          
+          // Get the highest existing alert severity
+          const highestExisting = getHighestExistingSeverity(bin.id, 'fill_level');
+          const severityOrder = { 'medium': 1, 'high': 2, 'critical': 3 };
+          const currentSeverityValue = severityOrder[currentSeverity] || 0;
+          const existingSeverityValue = highestExisting ? severityOrder[highestExisting] : 0;
+          
+          // ESCALATION CASE: Current severity is higher than existing - always create alert
+          if (currentSeverityValue > existingSeverityValue) {
+            logger.info(MODULE, `🔺 Escalating alert for ${bin.name}: ${highestExisting || 'none'} → ${currentSeverity}`);
             
-            // Skip if there's already an unacknowledged alert at this level
-            if (hasUnacknowledgedAtThisLevel) {
-              logger.trace(MODULE, `Suppressing ${currentSeverity} alert for ${bin.name} - unacknowledged alert exists at this level`);
-              continue;
-            }
-            
-            // If alert exists at this level but was acknowledged, allow reminder (don't create duplicate)
-            if (alertExistsAtThisLevel) {
-              // Check if it was recently acknowledged (within last 30 minutes)
-              const recentlyAcknowledged = existingAlerts.some(alert =>
-                (alert.bin_id === bin.id || alert.compartment_id === bin.id) &&
-                alert.alert_type === 'fill_level' &&
-                alert.severity === currentSeverity &&
-                alert.status === 'active' &&
-                alert.acknowledged &&
-                alert.acknowledgedAt &&
-                new Date(alert.acknowledgedAt) > new Date(Date.now() - 30 * 60 * 1000)
-              );
-              
-              if (recentlyAcknowledged) {
-                logger.trace(MODULE, `Suppressing ${currentSeverity} alert for ${bin.name} - recently acknowledged (within 30 min)`);
-                continue;
-              }
-            }
-            
-            // Auto-resolve lower severity alerts when escalating to higher severity
-            // This allows high->critical transition even if high is unacknowledged
+            // Auto-resolve all lower severity alerts
             if (currentSeverity === 'critical') {
               await this.autoResolveAlertsForBin(bin.id, ['high', 'medium']);
             } else if (currentSeverity === 'high') {
               await this.autoResolveAlertsForBin(bin.id, ['medium']);
             }
             
-            // Create the alert (only one per bin per severity level)
+            // Create escalation alert
             const alert = {
               id: `alert-${bin.id}-fill-${currentSeverity}-${Date.now()}`,
               bin_id: bin.id,
@@ -1104,7 +1111,7 @@ export class FirebaseService {
               binType: 'SingleBin',
               alert_type: 'fill_level',
               severity: currentSeverity,
-              message: `${bin.name || 'Bin'} has reached ${fillPercentage}% capacity`,
+              message: `⚠️ ESCALATED: ${bin.name || 'Bin'} has reached ${fillPercentage}% capacity`,
               currentValue: fillPercentage,
               threshold: threshold,
               unit: '%',
@@ -1120,15 +1127,69 @@ export class FirebaseService {
             await this.saveAlert(alert);
             newAlerts.push(alert);
             
-            logger.info(MODULE, `🚨 Created ${currentSeverity} fill level alert for SingleBin: ${bin.name} (${fillPercentage}%)`);
+            logger.success(MODULE, `🚨 Created escalation alert: ${bin.name} → ${currentSeverity} (${fillPercentage}%)`);
+            continue;
           }
+          
+          // SAME SEVERITY CASE: Check if we should create a new alert at the same level
+          if (currentSeverityValue === existingSeverityValue) {
+            // Check if there's an unacknowledged alert at this level
+            const hasUnacknowledged = hasAnyUnacknowledgedAlert(bin.id, 'fill_level');
+            
+            if (hasUnacknowledged) {
+              logger.trace(MODULE, `Suppressing ${currentSeverity} alert for ${bin.name} - unacknowledged alert exists`);
+              continue;
+            }
+            
+            // Check if recently acknowledged (5-minute cooldown)
+            const recentlyAcknowledged = wasRecentlyAcknowledged(bin.id, 'fill_level', currentSeverity);
+            
+            if (recentlyAcknowledged) {
+              logger.trace(MODULE, `Suppressing ${currentSeverity} alert for ${bin.name} - recently acknowledged (5 min cooldown)`);
+              continue;
+            }
+            
+            // All checks passed - create reminder alert
+            logger.info(MODULE, `🔔 Creating reminder alert for ${bin.name} at ${currentSeverity} level`);
+          }
+          
+          // NEW ALERT CASE: No existing alerts, create first alert
+          if (!highestExisting) {
+            logger.info(MODULE, `🆕 Creating initial ${currentSeverity} alert for ${bin.name}`);
+          }
+          
+          // Create the alert
+          const alert = {
+            id: `alert-${bin.id}-fill-${currentSeverity}-${Date.now()}`,
+            bin_id: bin.id,
+            binName: bin.name || `Bin ${bin.id}`,
+            binType: 'SingleBin',
+            alert_type: 'fill_level',
+            severity: currentSeverity,
+            message: `${bin.name || 'Bin'} has reached ${fillPercentage}% capacity`,
+            currentValue: fillPercentage,
+            threshold: threshold,
+            unit: '%',
+            status: 'active',
+            acknowledged: false,
+            acknowledgedAt: null,
+            acknowledgedBy: null,
+            location: bin.location || 'Unknown',
+            created_at: new Date().toISOString(),
+            timestamp: new Date().toISOString()
+          };
+          
+          await this.saveAlert(alert);
+          newAlerts.push(alert);
+          
+          logger.success(MODULE, `🚨 Created ${currentSeverity} alert for ${bin.name} (${fillPercentage}%)`);
           
         } catch (error) {
           logger.error(MODULE, `Error monitoring bin ${bin.id}:`, error);
         }
       }
       
-      // Monitor Compartments
+      // Monitor Compartments (same logic as SingleBins)
       for (const compartment of compartments) {
         try {
           const binHeight = compartment.bin_height || compartment.height || 100;
@@ -1154,43 +1215,25 @@ export class FirebaseService {
             currentSeverity = 'medium';
           }
           
-          // Same logic as SingleBins: check acknowledgment state
-          if (currentSeverity) {
-            const hasUnacknowledgedAtThisLevel = hasUnacknowledgedAlertAtLevel(compartment.id, 'fill_level', currentSeverity);
-            const alertExistsAtThisLevel = alertExistsForLevel(compartment.id, 'fill_level', currentSeverity);
+          if (!currentSeverity) {
+            continue;
+          }
+          
+          const highestExisting = getHighestExistingSeverity(compartment.id, 'fill_level');
+          const severityOrder = { 'medium': 1, 'high': 2, 'critical': 3 };
+          const currentSeverityValue = severityOrder[currentSeverity] || 0;
+          const existingSeverityValue = highestExisting ? severityOrder[highestExisting] : 0;
+          
+          // ESCALATION CASE
+          if (currentSeverityValue > existingSeverityValue) {
+            logger.info(MODULE, `🔺 Escalating alert for ${compartment.label}: ${highestExisting || 'none'} → ${currentSeverity}`);
             
-            // Skip if there's already an unacknowledged alert at this level
-            if (hasUnacknowledgedAtThisLevel) {
-              logger.trace(MODULE, `Suppressing ${currentSeverity} alert for ${compartment.label} - unacknowledged alert exists at this level`);
-              continue;
-            }
-            
-            // If alert exists at this level but was acknowledged, allow reminder after cooldown
-            if (alertExistsAtThisLevel) {
-              const recentlyAcknowledged = existingAlerts.some(alert =>
-                (alert.bin_id === compartment.id || alert.compartment_id === compartment.id) &&
-                alert.alert_type === 'fill_level' &&
-                alert.severity === currentSeverity &&
-                alert.status === 'active' &&
-                alert.acknowledged &&
-                alert.acknowledgedAt &&
-                new Date(alert.acknowledgedAt) > new Date(Date.now() - 30 * 60 * 1000)
-              );
-              
-              if (recentlyAcknowledged) {
-                logger.trace(MODULE, `Suppressing ${currentSeverity} alert for ${compartment.label} - recently acknowledged (within 30 min)`);
-                continue;
-              }
-            }
-            
-            // Auto-resolve lower severity alerts when escalating
             if (currentSeverity === 'critical') {
               await this.autoResolveAlertsForBin(compartment.id, ['high', 'medium']);
             } else if (currentSeverity === 'high') {
               await this.autoResolveAlertsForBin(compartment.id, ['medium']);
             }
             
-            // Create the alert
             const alert = {
               id: `alert-${compartment.id}-fill-${currentSeverity}-${Date.now()}`,
               compartment_id: compartment.id,
@@ -1198,7 +1241,7 @@ export class FirebaseService {
               binType: 'Compartment',
               alert_type: 'fill_level',
               severity: currentSeverity,
-              message: `${compartment.label || 'Compartment'} has reached ${fillPercentage}% capacity`,
+              message: `⚠️ ESCALATED: ${compartment.label || 'Compartment'} has reached ${fillPercentage}% capacity`,
               currentValue: fillPercentage,
               threshold: threshold,
               unit: '%',
@@ -1214,8 +1257,58 @@ export class FirebaseService {
             await this.saveAlert(alert);
             newAlerts.push(alert);
             
-            logger.info(MODULE, `🚨 Created ${currentSeverity} fill level alert for Compartment: ${compartment.label} (${fillPercentage}%)`);
+            logger.success(MODULE, `🚨 Created escalation alert: ${compartment.label} → ${currentSeverity} (${fillPercentage}%)`);
+            continue;
           }
+          
+          // SAME SEVERITY CASE
+          if (currentSeverityValue === existingSeverityValue) {
+            const hasUnacknowledged = hasAnyUnacknowledgedAlert(compartment.id, 'fill_level');
+            
+            if (hasUnacknowledged) {
+              logger.trace(MODULE, `Suppressing ${currentSeverity} alert for ${compartment.label} - unacknowledged alert exists`);
+              continue;
+            }
+            
+            const recentlyAcknowledged = wasRecentlyAcknowledged(compartment.id, 'fill_level', currentSeverity);
+            
+            if (recentlyAcknowledged) {
+              logger.trace(MODULE, `Suppressing ${currentSeverity} alert for ${compartment.label} - recently acknowledged (5 min cooldown)`);
+              continue;
+            }
+            
+            logger.info(MODULE, `🔔 Creating reminder alert for ${compartment.label} at ${currentSeverity} level`);
+          }
+          
+          // NEW ALERT CASE
+          if (!highestExisting) {
+            logger.info(MODULE, `🆕 Creating initial ${currentSeverity} alert for ${compartment.label}`);
+          }
+          
+          const alert = {
+            id: `alert-${compartment.id}-fill-${currentSeverity}-${Date.now()}`,
+            compartment_id: compartment.id,
+            binName: compartment.label || `Compartment ${compartment.id}`,
+            binType: 'Compartment',
+            alert_type: 'fill_level',
+            severity: currentSeverity,
+            message: `${compartment.label || 'Compartment'} has reached ${fillPercentage}% capacity`,
+            currentValue: fillPercentage,
+            threshold: threshold,
+            unit: '%',
+            status: 'active',
+            acknowledged: false,
+            acknowledgedAt: null,
+            acknowledgedBy: null,
+            location: compartment.location || 'Unknown',
+            created_at: new Date().toISOString(),
+            timestamp: new Date().toISOString()
+          };
+          
+          await this.saveAlert(alert);
+          newAlerts.push(alert);
+          
+          logger.success(MODULE, `🚨 Created ${currentSeverity} alert for ${compartment.label} (${fillPercentage}%)`);
           
         } catch (error) {
           logger.error(MODULE, `Error monitoring compartment ${compartment.id}:`, error);

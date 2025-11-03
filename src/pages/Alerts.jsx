@@ -32,12 +32,9 @@ export default function Alerts() {
 
   useEffect(() => {
     loadAlerts();
-    // Auto-generate alerts every 5 minutes
-    const interval = setInterval(() => {
-      generateAlerts();
-    }, 5 * 60 * 1000);
-    
-    return () => clearInterval(interval);
+    // ✅ REMOVED: Auto-generate alerts interval to prevent duplicates
+    // The Dashboard already handles alert generation every 5 minutes
+    // Users can manually trigger alert generation using the "Check for Alerts" button
   }, []);
 
   const loadAlerts = async () => {

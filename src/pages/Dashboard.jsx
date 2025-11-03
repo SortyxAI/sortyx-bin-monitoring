@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { SmartBin } from "@/api/entities";
 import { Compartment } from "@/api/entities";
 import { SingleBin } from "@/api/entities";
@@ -28,7 +28,13 @@ import RecentAlerts from "../components/dashboard/RecentAlerts";
 import SingleBinDashboardCard from "../components/dashboard/SingleBinDashboardCard";
 
 // Define a constant for max bins allowed on a free plan
-const MAX_FREE_BINS = 2; // Example limit for demonstration
+const MAX_FREE_BINS = 10; // Example limit for demonstration
+
+// ✅ OPTIMIZATION: Memoize components to prevent unnecessary re-renders
+const MemoizedSmartBinCard = React.memo(SmartBinCard);
+const MemoizedSingleBinDashboardCard = React.memo(SingleBinDashboardCard);
+const MemoizedStatsOverview = React.memo(StatsOverview);
+const MemoizedRecentAlerts = React.memo(RecentAlerts);
 
 export default function Dashboard() {
   const [smartBins, setSmartBins] = useState([]);
@@ -62,12 +68,15 @@ export default function Dashboard() {
   const [testDataEnabled, setTestDataEnabled] = useState(TestDataService.isTestDataEnabled);
   const [demoPhaseInfo, setDemoPhaseInfo] = useState(null);
 
-  // Subscribe to real-time Firebase data
-  useEffect(() => {
-    console.log('Setting up Firebase real-time subscription...');
-    setFirebaseError(null);
-    
-    // ✅ FIX: Collect device IDs from BOTH singleBins AND compartments
+  // ✅ OPTIMIZATION: Add refs to track renders and prevent excessive updates
+  const lastDataLoadRef = useRef(Date.now());
+  const dataLoadIntervalRef = useRef(null);
+  const sensorUpdateTimeoutRef = useRef(null);
+
+  console.log('🔄 Dashboard render'); // Track render count
+
+  // ✅ OPTIMIZATION: Memoize device IDs to prevent unnecessary Firebase re-subscriptions
+  const deviceIds = useMemo(() => {
     const singleBinDeviceIds = singleBins
       .map(bin => bin.iot_device_id || bin.device_id || bin.deviceId)
       .filter(Boolean);
@@ -76,131 +85,72 @@ export default function Dashboard() {
       .map(comp => comp.iot_device_id || comp.device_id || comp.deviceId)
       .filter(Boolean);
     
-    // Combine and deduplicate device IDs
-    const deviceIds = [...new Set([...singleBinDeviceIds, ...compartmentDeviceIds])];
-    
-    if (deviceIds.length === 0) {
-      console.log('⚠️ No devices to subscribe to');
-      return;
-    }
-    
-    console.log(`📡 Subscribing to ${deviceIds.length} device(s):`, deviceIds);
-    console.log(`   - SingleBins: ${singleBinDeviceIds.length} devices`);
-    console.log(`   - Compartments: ${compartmentDeviceIds.length} devices`);
-    
-    try {
-      // Subscribe to all devices
-      const unsubscribers = deviceIds.map(deviceId => {
-        return FirebaseService.subscribeToSensorData(deviceId, (sensorData) => {
-          console.log(`Real-time sensor data received for ${deviceId}:`, sensorData);
-          setRealTimeData(sensorData);
-          setIsConnectedToFirebase(true);
-          setFirebaseError(null);
-        });
-      });
+    return [...new Set([...singleBinDeviceIds, ...compartmentDeviceIds])];
+  }, [singleBins.length, compartments.length]); // Only recalculate when counts change
 
-      return () => {
-        // Cleanup all subscriptions
-        unsubscribers.forEach(unsubscribe => {
-          if (unsubscribe) {
-            unsubscribe();
-          }
-        });
-      };
-    } catch (error) {
-      console.error('Firebase subscription error:', error);
-      setFirebaseError(error.message);
-      setIsConnectedToFirebase(false);
-    }
-  }, [singleBins, compartments]); // ✅ FIX: Re-subscribe when singleBins OR compartments change
+  // ✅ OPTIMIZATION: Memoize sensor data sync function
+  const syncSensorDataWithBins = useCallback((latestData) => {
+    if (!latestData || latestData.length === 0) return;
 
-  // Sync real-time sensor data with SingleBins
-  useEffect(() => {
-    if (!realTimeData || realTimeData.length === 0) {
-      return;
-    }
-
-    console.log('🔄 Syncing real-time sensor data with SingleBins...');
+    console.log('🔄 Syncing sensor data...');
     
-    // Update singleBins with the latest sensor data
-    setSingleBins(prevBins => {
-      return prevBins.map(bin => {
-        // Get the device ID from the bin
+    // Update singleBins
+    setSingleBins(prevBins => 
+      prevBins.map(bin => {
         const deviceId = bin.iot_device_id || bin.device_id || bin.deviceId;
+        if (!deviceId) return bin;
         
-        if (!deviceId) {
-          return bin; // No device linked, skip
+        const latestSensorData = Array.isArray(latestData) 
+          ? latestData.find(data => data.deviceId === deviceId) || latestData[0]
+          : latestData;
+        
+        if (!latestSensorData || latestSensorData.deviceId !== deviceId) return bin;
+        
+        // Only update if data actually changed
+        if (bin.distance === latestSensorData.distance && 
+            bin.battery_level === latestSensorData.battery) {
+          return bin;
         }
         
-        // Find matching sensor data (realTimeData is an array)
-        const latestSensorData = Array.isArray(realTimeData) 
-          ? realTimeData.find(data => data.deviceId === deviceId) || realTimeData[0]
-          : realTimeData;
-        
-        if (!latestSensorData || latestSensorData.deviceId !== deviceId) {
-          return bin; // No matching data
-        }
-        
-        console.log(`✅ Updating bin ${bin.name} with sensor data from ${deviceId}`, latestSensorData);
-        
-        // Merge sensor data into the bin
         return {
           ...bin,
-          // ✅ FIX: Map distance to sensor_value for fill level calculation
           sensorValue: latestSensorData.distance ?? bin.sensorValue,
           sensor_value: latestSensorData.distance ?? bin.sensor_value,
-          // Distance & Fill Level
           distance: latestSensorData.distance ?? bin.distance,
           fill_level: latestSensorData.fillLevel ?? bin.fill_level,
           current_fill: latestSensorData.fillLevel ?? bin.current_fill,
-          // Battery
           battery_level: latestSensorData.battery ?? bin.battery_level,
-          // Environmental sensors
           temperature: latestSensorData.temperature ?? bin.temperature,
           humidity: latestSensorData.humidity ?? bin.humidity,
-          // Additional sensor data
           air_quality: latestSensorData.raw?.uplink_message?.decoded_payload?.air_quality || 
                       latestSensorData.raw?.decoded_payload?.air_quality ||
                       bin.air_quality,
           odour_level: latestSensorData.raw?.uplink_message?.decoded_payload?.odour_level || 
                       latestSensorData.raw?.decoded_payload?.odour_level ||
                       bin.odour_level,
-          // Tilt/tamper detection
           tilt_status: latestSensorData.tilt ?? bin.tilt_status,
-          // Update metadata
           last_sensor_update: latestSensorData.timestamp || new Date().toISOString(),
           sensor_data_available: true
         };
-      });
-    });
-  }, [realTimeData]); // Re-run whenever realTimeData changes
-
-  // ✅ NEW: Sync real-time sensor data with Compartments
-  useEffect(() => {
-    if (!realTimeData || realTimeData.length === 0) {
-      return;
-    }
-
-    console.log('🔄 Syncing real-time sensor data with Compartments...');
+      })
+    );
     
-    // Update compartments with the latest sensor data
-    setCompartments(prevCompartments => {
-      return prevCompartments.map(compartment => {
+    // Update compartments
+    setCompartments(prevCompartments => 
+      prevCompartments.map(compartment => {
         const deviceId = compartment.iot_device_id || compartment.device_id || compartment.deviceId;
+        if (!deviceId) return compartment;
         
-        if (!deviceId) {
+        const latestSensorData = Array.isArray(latestData) 
+          ? latestData.find(data => data.deviceId === deviceId) || latestData[0]
+          : latestData;
+        
+        if (!latestSensorData || latestSensorData.deviceId !== deviceId) return compartment;
+        
+        if (compartment.distance === latestSensorData.distance && 
+            compartment.battery_level === latestSensorData.battery) {
           return compartment;
         }
-        
-        const latestSensorData = Array.isArray(realTimeData) 
-          ? realTimeData.find(data => data.deviceId === deviceId) || realTimeData[0]
-          : realTimeData;
-        
-        if (!latestSensorData || latestSensorData.deviceId !== deviceId) {
-          return compartment;
-        }
-        
-        console.log(`✅ Updating compartment ${compartment.label || compartment.name} with sensor data from ${deviceId}`, latestSensorData);
         
         return {
           ...compartment,
@@ -222,9 +172,59 @@ export default function Dashboard() {
           last_sensor_update: latestSensorData.timestamp || new Date().toISOString(),
           sensor_data_available: true
         };
+      })
+    );
+  }, []);
+
+  // ✅ OPTIMIZATION: Subscribe to Firebase once with debouncing
+  useEffect(() => {
+    if (deviceIds.length === 0) {
+      console.log('⚠️ No devices to subscribe to');
+      return;
+    }
+    
+    console.log(`📡 Setting up Firebase subscription for ${deviceIds.length} device(s)`);
+    
+    try {
+      const unsubscribers = deviceIds.map(deviceId => {
+        return FirebaseService.subscribeToSensorData(deviceId, (sensorData) => {
+          console.log(`📊 Real-time data received for ${deviceId}`);
+          
+          // Debounce updates to prevent rapid re-renders
+          if (sensorUpdateTimeoutRef.current) {
+            clearTimeout(sensorUpdateTimeoutRef.current);
+          }
+          
+          sensorUpdateTimeoutRef.current = setTimeout(() => {
+            setRealTimeData(sensorData);
+            setIsConnectedToFirebase(true);
+            setFirebaseError(null);
+          }, 500); // Wait 500ms for batched updates
+        });
       });
-    });
-  }, [realTimeData]); // Re-run whenever realTimeData changes
+
+      return () => {
+        console.log('🛑 Cleaning up Firebase subscriptions');
+        if (sensorUpdateTimeoutRef.current) {
+          clearTimeout(sensorUpdateTimeoutRef.current);
+        }
+        unsubscribers.forEach(unsubscribe => {
+          if (unsubscribe) unsubscribe();
+        });
+      };
+    } catch (error) {
+      console.error('Firebase subscription error:', error);
+      setFirebaseError(error.message);
+      setIsConnectedToFirebase(false);
+    }
+  }, [deviceIds.join(',')]); // Only re-subscribe when device IDs actually change
+
+  // ✅ OPTIMIZATION: Use memoized sync function
+  useEffect(() => {
+    if (realTimeData) {
+      syncSensorDataWithBins(realTimeData);
+    }
+  }, [realTimeData, syncSensorDataWithBins]);
 
   // ✅ NEW: Monitor bins and auto-create alerts when thresholds are exceeded
   useEffect(() => {
@@ -418,15 +418,19 @@ export default function Dashboard() {
 
     loadData();
 
-    const interval = setInterval(() => {
+    // ✅ OPTIMIZATION: Increase interval from 30s to 2 minutes
+    dataLoadIntervalRef.current = setInterval(() => {
       if (isMounted) {
+        console.log('⏰ Background refresh (2-min interval)');
         loadData();
       }
-    }, 30000);
+    }, 120000); // 2 minutes
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      if (dataLoadIntervalRef.current) {
+        clearInterval(dataLoadIntervalRef.current);
+      }
     };
   }, [testDataEnabled]);
 
@@ -483,15 +487,15 @@ export default function Dashboard() {
     }
   }, [singleBins.length]);
 
-  // Handle bin card click to show details
-  const handleBinCardClick = (bin, type) => {
+  // ✅ OPTIMIZATION: Memoize event handlers
+  const handleBinCardClick = useCallback((bin, type) => {
     console.log('Dashboard bin card clicked:', bin, type);
     setSelectedBinForDetails(bin);
     setSelectedBinType(type);
     setShowBinDetails(true);
-  };
+  }, []);
 
-  const handleDragEnd = async (result) => {
+  const handleDragEnd = useCallback(async (result) => {
     if (!result.destination) return;
 
     const sourceIndex = result.source.index;
@@ -506,68 +510,80 @@ export default function Dashboard() {
     setSmartBinOrder(newOrder);
     
     try {
-      // This will update the smartbin_order for the currently logged-in user.
       if (user && user.id) {
         await User.updateMyUserData({ smartbin_order: newOrder });
-      } else {
-        console.error("Cannot update user data: user is null or missing ID", user);
       }
     } catch (error) {
       console.error("Error saving bin order:", error);
     }
-  };
+  }, [smartBinOrder, user]);
 
-  // ✅ NEW: Toggle individual SingleBin card
-  const handleToggleSingleBin = (binId) => {
+  const handleToggleSingleBin = useCallback((binId) => {
     setSingleBinExpandedStates(prev => ({
       ...prev,
       [binId]: !prev[binId]
     }));
-  };
+  }, []);
 
-  // ✅ NEW: Toggle all SingleBin cards
-  const handleToggleAllSingleBins = () => {
+  const handleToggleAllSingleBins = useCallback(() => {
     const newExpandedState = !allSingleBinsExpanded;
     setAllSingleBinsExpanded(newExpandedState);
     
-    // Update all individual states
     const newStates = {};
     singleBins.forEach(bin => {
       newStates[bin.id] = newExpandedState;
     });
     setSingleBinExpandedStates(newStates);
-  };
+  }, [allSingleBinsExpanded, singleBins]);
 
-  const orderedSmartBins = smartBinOrder
-    .filter(id => id != null)
-    .map(id => smartBins.find(bin => bin && bin.id === id))
-    .filter(Boolean)
-    .concat(smartBins.filter(bin => bin && bin.id && !smartBinOrder.includes(bin.id)));
+  // ✅ OPTIMIZATION: Memoize computed values
+  const orderedSmartBins = useMemo(() => {
+    return smartBinOrder
+      .filter(id => id != null)
+      .map(id => smartBins.find(bin => bin && bin.id === id))
+      .filter(Boolean)
+      .concat(smartBins.filter(bin => bin && bin.id && !smartBinOrder.includes(bin.id)));
+  }, [smartBinOrder, smartBins]);
 
-  // Count unique active SmartBins - ensure we only count main SmartBins, not duplicates
-  // Create a Set of unique SmartBin IDs that are active to avoid double counting
-  const uniqueActiveSmartBinIds = new Set(
-    smartBins
-      .filter(bin => bin && bin.id && bin.status === 'active')
-      .map(bin => bin.id)
-  );
-  const activeSmartBinsCount = uniqueActiveSmartBinIds.size;
-  
-  const activeSingleBins = singleBins.filter(bin => bin.status === 'active').length;
+  // ✅ Calculate plan limits
+  const isFreePlan = useMemo(() => {
+    return !user?.subscription_plan || user.subscription_plan === 'free';
+  }, [user?.subscription_plan]);
 
-  const criticalAlerts = alerts.filter(alert => alert.severity === 'critical');
- 
-  const avgFillLevel = compartments && compartments.length > 0
-  ? compartments.reduce((sum, comp) => sum + Number(comp.current_fill || 0), 0) / compartments.length
-  : 0;
+  const hasReachedSingleBinLimit = useMemo(() => {
+    return isFreePlan && singleBins.length >= MAX_FREE_BINS;
+  }, [isFreePlan, singleBins.length]);
 
-  // Calculate total compartments (smart bin compartments + single bins)
-  const totalCompartments = compartments.length + singleBins.length;
+  const hasReachedSmartBinLimit = useMemo(() => {
+    return isFreePlan && smartBins.length >= MAX_FREE_BINS;
+  }, [isFreePlan, smartBins.length]);
 
-  // Check if the user is on a free plan and has reached the limit
-  const isFreePlan = user?.plan === 'free';
-  const hasReachedSmartBinLimit = isFreePlan && smartBins.length >= MAX_FREE_BINS;
-  const hasReachedSingleBinLimit = isFreePlan && singleBins.length >= MAX_FREE_BINS;
+  const activeSmartBinsCount = useMemo(() => {
+    const uniqueActiveIds = new Set(
+      smartBins
+        .filter(bin => bin && bin.id && bin.status === 'active')
+        .map(bin => bin.id)
+    );
+    return uniqueActiveIds.size;
+  }, [smartBins]);
+
+  const activeSingleBins = useMemo(() => {
+    return singleBins.filter(bin => bin.status === 'active').length;
+  }, [singleBins]);
+
+  const criticalAlerts = useMemo(() => {
+    return alerts.filter(alert => alert.severity === 'critical');
+  }, [alerts]);
+
+  const avgFillLevel = useMemo(() => {
+    return compartments && compartments.length > 0
+      ? compartments.reduce((sum, comp) => sum + Number(comp.current_fill || 0), 0) / compartments.length
+      : 0;
+  }, [compartments]);
+
+  const totalCompartments = useMemo(() => {
+    return compartments.length + singleBins.length;
+  }, [compartments.length, singleBins.length]);
 
   if (loading) {
     return (
@@ -785,7 +801,7 @@ export default function Dashboard() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
       >
-        <StatsOverview 
+        <MemoizedStatsOverview 
           activeSmartBins={activeSmartBinsCount}
           criticalAlerts={criticalAlerts.length}
           avgFillLevel={avgFillLevel}
@@ -893,20 +909,6 @@ export default function Dashboard() {
                         </motion.div>
                       ) : (
                         <>
-                          {isFreePlan && !hasReachedSingleBinLimit && (
-                            <div className="mb-4 text-center text-sm text-yellow-600 dark:text-yellow-300">
-                              You have {MAX_FREE_BINS - singleBins.length} SingleBins remaining on your free plan.
-                            </div>
-                          )}
-                          {hasReachedSingleBinLimit && (
-                            <motion.div
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 p-4 rounded-lg mb-4 text-center border border-yellow-200 dark:border-yellow-700"
-                            >
-                              You've reached the limit of {MAX_FREE_BINS} SingleBins on your free plan. Upgrade to add more!
-                            </motion.div>
-                          )}
                           <div className="flex justify-end mb-4">
                             <motion.button
                               onClick={handleToggleAllSingleBins}
@@ -958,7 +960,7 @@ export default function Dashboard() {
                                   exit={{ opacity: 0, x: 20 }}
                                   transition={{ delay: index * 0.1 }}
                                 >
-                                  <SingleBinDashboardCard 
+                                  <MemoizedSingleBinDashboardCard 
                                     singleBin={singleBin} 
                                     onCardClick={handleBinCardClick}
                                     isExpanded={singleBinExpandedStates[singleBin.id]}
@@ -1086,11 +1088,6 @@ export default function Dashboard() {
                         </motion.div>
                       ) : (
                         <>
-                          {isFreePlan && !hasReachedSmartBinLimit && (
-                            <div className="mb-4 text-center text-sm text-yellow-600 dark:text-yellow-300">
-                              You have {MAX_FREE_BINS - smartBins.length} SmartBins remaining on your free plan.
-                            </div>
-                          )}
                           <DragDropContext onDragEnd={handleDragEnd}>
                             <Droppable droppableId="smartbins" type="SMARTBIN">
                               {(provided, snapshot) => (
@@ -1115,7 +1112,7 @@ export default function Dashboard() {
                                             {...provided.dragHandleProps}
                                             className={`mb-4 ${snapshot.isDragging ? 'z-50' : ''}`}
                                           >
-                                            <SmartBinCard 
+                                            <MemoizedSmartBinCard 
                                               smartBin={smartBin} 
                                               compartments={compartments.filter(c => c.smartbin_id === smartBin.id && smartBin.id != null)}
                                               alerts={alerts.filter(a => 
@@ -1149,7 +1146,7 @@ export default function Dashboard() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.8 }}
           >
-            <RecentAlerts alerts={alerts} />
+            <MemoizedRecentAlerts alerts={alerts} />
           </motion.div>
           
           {smartBins.length > 0 && (
