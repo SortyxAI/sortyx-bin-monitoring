@@ -1,66 +1,235 @@
 // Firebase-based API client for Sortyx Smart Bin application
-// Now uses Firebase Realtime Database with IoT sensor data
+// Now uses Firebase Authentication and user-based data segregation
 
 import { FirebaseService } from '../services/firebaseService';
+import { auth, getCurrentUser, getCurrentUserId } from '../config/firebase';
+import { 
+  signInWithEmailAndPassword, 
+  signOut, 
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 class FirebaseAPIClient {
   constructor() {
-    this.user = {
-      id: 'admin',
-      email: 'admin@sortyx.com',
-      full_name: 'Admin User',
-      plan: 'premium',
-      applicationId:"sortyx-iot",
-      smartbin_order: []
-    };
+    this.currentUser = null;
   }
 
-  // Authentication methods using mock data
+  // Real Firebase Authentication
   async login(email, password) {
-    // Simple mock authentication
-    if (email === 'admin@sortyx.com' && password === 'admin123') {
-      const token = 'mock-firebase-token';
-      localStorage.setItem('auth_token', token);
-      return { token, user: this.user };
-    }
-    throw new Error('Invalid credentials');
-  }
-
-  async me() {
-    return this.user;
-  }
-
-  async updateMyUserData(data) {
-    this.user = { ...this.user, ...data };
-    return this.user;
-  }
-
-  logout() {
-    localStorage.removeItem('auth_token');
-  }
-
-  // Firebase-based CRUD operations
-  async getSmartBins() {
     try {
-      return await FirebaseService.getSmartBins();
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+      
+      // Get or create user profile in Firestore
+      const userProfile = await this.getUserProfile(firebaseUser.uid);
+      
+      if (!userProfile) {
+        // Create default profile if it doesn't exist
+        await this.createUserProfile(firebaseUser.uid, {
+          email: firebaseUser.email,
+          full_name: firebaseUser.displayName || email.split('@')[0],
+          created_at: new Date().toISOString()
+        });
+      }
+      
+      // Fetch complete user data
+      this.currentUser = await this.me();
+      
+      const token = await firebaseUser.getIdToken();
+      localStorage.setItem('auth_token', token);
+      
+      console.log('✅ User logged in successfully:', this.currentUser.email);
+      
+      return { token, user: this.currentUser };
+    } catch (error) {
+      console.error('❌ Login error:', error);
+      throw new Error(error.message || 'Login failed. Please check your credentials.');
+    }
+  }
+
+  // Register new user
+  async register(email, password, fullName) {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+      
+      // Update display name
+      if (fullName) {
+        await updateProfile(firebaseUser, { displayName: fullName });
+      }
+      
+      // Create user profile in Firestore
+      await this.createUserProfile(firebaseUser.uid, {
+        email: email,
+        full_name: fullName || email.split('@')[0],
+        plan: 'free',
+        subscription_plan: 'free',
+        applicationId: null,
+        smartbin_order: [],
+        created_at: new Date().toISOString()
+      });
+      
+      console.log('✅ User registered successfully:', email);
+      
+      return await this.login(email, password);
+    } catch (error) {
+      console.error('❌ Registration error:', error);
+      throw new Error(error.message || 'Registration failed.');
+    }
+  }
+
+  // Get current user profile from Firestore
+  async getUserProfile(userId) {
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (userDoc.exists()) {
+        return { id: userId, ...userDoc.data() };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('❌ Error fetching user profile:', error);
+      return null;
+    }
+  }
+
+  // Create user profile in Firestore
+  async createUserProfile(userId, userData) {
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      const profileData = {
+        ...userData,
+        userId: userId,
+        plan: userData.plan || 'free',
+        subscription_plan: userData.subscription_plan || 'free',
+        applicationId: userData.applicationId || null,
+        smartbin_order: userData.smartbin_order || [],
+        created_at: userData.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      await setDoc(userDocRef, profileData);
+      console.log('✅ User profile created:', userId);
+      
+      return profileData;
+    } catch (error) {
+      console.error('❌ Error creating user profile:', error);
+      throw error;
+    }
+  }
+
+  // Get current authenticated user
+  async me() {
+    try {
+      const firebaseUser = await getCurrentUser();
+      
+      if (!firebaseUser) {
+        throw new Error('No authenticated user');
+      }
+      
+      // Get user profile from Firestore
+      const userProfile = await this.getUserProfile(firebaseUser.uid);
+      
+      if (!userProfile) {
+        // Create profile if missing
+        return await this.createUserProfile(firebaseUser.uid, {
+          email: firebaseUser.email,
+          full_name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+        });
+      }
+      
+      this.currentUser = userProfile;
+      return userProfile;
+    } catch (error) {
+      console.error('❌ Error getting current user:', error);
+      throw error;
+    }
+  }
+
+  // Update user profile
+  async updateMyUserData(data) {
+    try {
+      const firebaseUser = await getCurrentUser();
+      
+      if (!firebaseUser) {
+        throw new Error('No authenticated user');
+      }
+      
+      const userDocRef = doc(db, 'users', firebaseUser.uid);
+      const updateData = {
+        ...data,
+        updated_at: new Date().toISOString()
+      };
+      
+      await updateDoc(userDocRef, updateData);
+      
+      // Update local cache
+      this.currentUser = { ...this.currentUser, ...updateData };
+      
+      console.log('✅ User profile updated');
+      return this.currentUser;
+    } catch (error) {
+      console.error('❌ Error updating user profile:', error);
+      throw error;
+    }
+  }
+
+  // Password reset
+  async resetPassword(email) {
+    try {
+      await sendPasswordResetEmail(auth, email);
+      console.log('✅ Password reset email sent');
+    } catch (error) {
+      console.error('❌ Password reset error:', error);
+      throw error;
+    }
+  }
+
+  // Logout
+  async logout() {
+    try {
+      await signOut(auth);
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('impersonatedUser');
+      this.currentUser = null;
+      console.log('✅ User logged out');
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+      throw error;
+    }
+  }
+
+  // Firebase-based CRUD operations (now user-scoped)
+  async getSmartBins(userId = null) {
+    try {
+      const effectiveUserId = userId || (await getCurrentUserId());
+      return await FirebaseService.getSmartBins(effectiveUserId);
     } catch (error) {
       console.error('Error fetching smart bins:', error);
       return [];
     }
   }
 
-  async getCompartments() {
+  async getCompartments(userId = null) {
     try {
-      return await FirebaseService.getCompartments();
+      const effectiveUserId = userId || (await getCurrentUserId());
+      return await FirebaseService.getCompartments(effectiveUserId);
     } catch (error) {
       console.error('Error fetching compartments:', error);
       return [];
     }
   }
 
-  async getAlerts() {
+  async getAlerts(userId = null) {
     try {
-      return await FirebaseService.getAlerts();
+      const effectiveUserId = userId || (await getCurrentUserId());
+      return await FirebaseService.getAlerts(effectiveUserId);
     } catch (error) {
       console.error('Error fetching alerts:', error);
       return [];
@@ -89,19 +258,22 @@ class FirebaseEntityBase {
   }
 
   async list(orderBy = null, limit = null) {
+    const userId = await getCurrentUserId();
+    
     switch(this.entityName) {
       case 'smartbins':
-        return await this.client.getSmartBins();
+        return await this.client.getSmartBins(userId);
       case 'compartments':
-        return await this.client.getCompartments();
+        return await this.client.getCompartments(userId);
       case 'alerts':
-        return await this.client.getAlerts();
+        return await this.client.getAlerts(userId);
       case 'singlebins':
-        return []; // Not implemented for IoT setup
+        return await FirebaseService.getSingleBins(userId);
       case 'subscription-plans':
         return [
-          { id: 1, name: 'Free', price: 0, features: ['Up to 2 SmartBins', 'Basic monitoring'] },
-          { id: 2, name: 'Premium', price: 29.99, features: ['Unlimited SmartBins', 'Real-time monitoring', 'Advanced analytics'] }
+          { id: 1, name: 'Free', price: 0, features: ['Up to 10 bins', 'Basic monitoring', 'Email alerts'] },
+          { id: 2, name: 'Pro', price: 29.99, features: ['Unlimited bins', 'Real-time monitoring', 'Advanced analytics', 'Priority support'] },
+          { id: 3, name: 'Enterprise', price: 99.99, features: ['Everything in Pro', 'Custom integrations', 'Dedicated support', 'SLA guarantee'] }
         ];
       default:
         return [];
@@ -118,11 +290,11 @@ class FirebaseEntityBase {
 
     return data.filter(item => {
       return Object.entries(filters).every(([key, value]) => {
-        if (key === 'created_by') {
-          return true; // Skip filtering by user for IoT data
+        if (key === 'created_by' || key === 'userId') {
+          return true; // Already filtered by user in list()
         }
         if (key === 'resolved' && this.entityName === 'alerts') {
-          return item.resolved === value;
+          return item.resolved === value || item.status === (value ? 'resolved' : 'active');
         }
         return item[key] === value;
       });
@@ -166,6 +338,10 @@ export const User = {
     return await firebaseClient.login(email, password);
   },
   
+  async register(email, password, fullName) {
+    return await firebaseClient.register(email, password, fullName);
+  },
+  
   async me() {
     return await firebaseClient.me();
   },
@@ -174,8 +350,12 @@ export const User = {
     return await firebaseClient.updateMyUserData(data);
   },
   
-  logout() {
-    firebaseClient.logout();
+  async resetPassword(email) {
+    return await firebaseClient.resetPassword(email);
+  },
+  
+  async logout() {
+    return await firebaseClient.logout();
   }
 };
 

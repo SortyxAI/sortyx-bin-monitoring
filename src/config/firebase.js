@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
 // Debug: Log environment variables to verify they're loaded
 console.log('🔍 Firebase Environment Variables Check:');
@@ -58,6 +58,22 @@ try {
   console.error('Error details:', error.message);
   throw error;
 }
+
+// Helper function to get current authenticated user
+export const getCurrentUser = () => {
+  return new Promise((resolve, reject) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    }, reject);
+  });
+};
+
+// Helper to get current user ID
+export const getCurrentUserId = async () => {
+  const user = await getCurrentUser();
+  return user?.uid || null;
+};
 
 export { database, db, auth };
 export default app;

@@ -1,6 +1,16 @@
-import { database, db } from '../config/firebase';
+import { database, db, auth } from '../config/firebase';
 import { ref, onValue, push, set, get, query, orderByChild, limitToLast, orderByKey, child } from 'firebase/database';
 import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, orderBy, limit, where, query as firestoreQuery } from 'firebase/firestore';
+
+// ✅ Helper function to get current user ID from Firebase Auth
+const getCurrentUserId = async () => {
+  return new Promise((resolve) => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      unsubscribe();
+      resolve(user?.uid || null);
+    });
+  });
+};
 
 // ✅ Import debug logging system
 const logger = (() => {
@@ -364,25 +374,41 @@ export class FirebaseService {
     }
   }
 
-  // Get SmartBins from Firestore
-  static async getSmartBins() {
+  // Get SmartBins from Firestore - USER-BASED
+  static async getSmartBins(userId = null) {
     try {
-      logger.debug(MODULE, 'Getting SmartBins from Firestore...');
+      logger.debug(MODULE, 'Getting SmartBins from Firestore...', { userId });
       
       if (!db) {
         logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
+      }
       
       const smartBinsCollection = collection(db, 'smart-bins');
-      const smartBinsSnapshot = await getDocs(smartBinsCollection);
+      
+      // If userId is provided, filter by userId
+      let smartBinsQuery;
+      if (userId) {
+        smartBinsQuery = firestoreQuery(
+          smartBinsCollection,
+          where('userId', '==', userId)
+        );
+      } else {
+        smartBinsQuery = smartBinsCollection;
+      }
+      
+      const smartBinsSnapshot = await getDocs(smartBinsQuery);
       
       if (!smartBinsSnapshot.empty) {
         const smartBins = smartBinsSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
-        logger.info(MODULE, `Retrieved ${smartBins.length} SmartBins`);
+        logger.info(MODULE, `Retrieved ${smartBins.length} SmartBins for user ${userId || 'all'}`);
         return smartBins;
       }
       
@@ -395,25 +421,41 @@ export class FirebaseService {
     }
   }
 
-  // Get SingleBins from Firestore
-  static async getSingleBins() {
+  // Get SingleBins from Firestore - USER-BASED
+  static async getSingleBins(userId = null) {
     try {
-      logger.debug(MODULE, 'Getting SingleBins from Firestore...');
+      logger.debug(MODULE, 'Getting SingleBins from Firestore...', { userId });
       
       if (!db) {
         logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
+      }
       
       const singleBinsCollection = collection(db, 'single-bins');
-      const singleBinsSnapshot = await getDocs(singleBinsCollection);
+      
+      // If userId is provided, filter by userId
+      let singleBinsQuery;
+      if (userId) {
+        singleBinsQuery = firestoreQuery(
+          singleBinsCollection,
+          where('userId', '==', userId)
+        );
+      } else {
+        singleBinsQuery = singleBinsCollection;
+      }
+      
+      const singleBinsSnapshot = await getDocs(singleBinsQuery);
       
       if (!singleBinsSnapshot.empty) {
         const singleBins = singleBinsSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
-        logger.info(MODULE, `Retrieved ${singleBins.length} SingleBins`);
+        logger.info(MODULE, `Retrieved ${singleBins.length} SingleBins for user ${userId || 'all'}`);
         return singleBins;
       }
       
@@ -426,17 +468,21 @@ export class FirebaseService {
     }
   }
 
-  // Get SingleBins with enriched sensor data from linked IoT devices
-  static async getSingleBinsWithSensorData() {
+  // Get SingleBins with enriched sensor data from linked IoT devices - USER-BASED
+  static async getSingleBinsWithSensorData(userId = null) {
     try {
-      logger.debug(MODULE, 'Getting SingleBins with enriched sensor data...');
+      logger.debug(MODULE, 'Getting SingleBins with enriched sensor data...', { userId });
       
       if (!db) {
         logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
+      }
       
-      const singleBins = await this.getSingleBins();
+      const singleBins = await this.getSingleBins(userId);
       
       if (singleBins.length === 0) {
         return [];
@@ -497,25 +543,41 @@ export class FirebaseService {
     }
   }
 
-  // Get Compartments from Firestore
-  static async getCompartments() {
+  // Get Compartments from Firestore - USER-BASED
+  static async getCompartments(userId = null) {
     try {
-      logger.debug(MODULE, 'Getting Compartments from Firestore...');
+      logger.debug(MODULE, 'Getting Compartments from Firestore...', { userId });
       
       if (!db) {
         logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
+      }
       
       const compartmentsCollection = collection(db, 'compartments');
-      const compartmentsSnapshot = await getDocs(compartmentsCollection);
+      
+      // If userId is provided, filter by userId
+      let compartmentsQuery;
+      if (userId) {
+        compartmentsQuery = firestoreQuery(
+          compartmentsCollection,
+          where('userId', '==', userId)
+        );
+      } else {
+        compartmentsQuery = compartmentsCollection;
+      }
+      
+      const compartmentsSnapshot = await getDocs(compartmentsQuery);
       
       if (!compartmentsSnapshot.empty) {
         const compartments = compartmentsSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
-        logger.info(MODULE, `Retrieved ${compartments.length} Compartments`);
+        logger.info(MODULE, `Retrieved ${compartments.length} Compartments for user ${userId || 'all'}`);
         return compartments;
       }
       
@@ -528,17 +590,21 @@ export class FirebaseService {
     }
   }
 
-  // ✅ NEW: Get Compartments with enriched sensor data from linked IoT devices
-  static async getCompartmentsWithSensorData() {
+  // ✅ NEW: Get Compartments with enriched sensor data from linked IoT devices - USER-BASED
+  static async getCompartmentsWithSensorData(userId = null) {
     try {
-      logger.debug(MODULE, 'Getting Compartments with enriched sensor data...');
+      logger.debug(MODULE, 'Getting Compartments with enriched sensor data...', { userId });
       
       if (!db) {
         logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
+      }
       
-      const compartments = await this.getCompartments();
+      const compartments = await this.getCompartments(userId);
       
       if (compartments.length === 0) {
         return [];
@@ -599,22 +665,52 @@ export class FirebaseService {
     }
   }
 
-  // Get Alerts from Firestore
-  static async getAlerts() {
+  // Get Alerts from Firestore - USER-BASED
+  static async getAlerts(userId = null) {
     try {
-      logger.debug(MODULE, 'Getting Alerts from Firestore...');
+      logger.debug(MODULE, 'Getting Alerts from Firestore...', { userId });
       
       if (!db) {
         logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
+      }
       
       const alertsCollection = collection(db, 'alerts');
-      const alertsQuery = firestoreQuery(
-        alertsCollection,
-        orderBy('created_at', 'desc'),
-        limit(50)
-      );
+      
+      // Build query based on userId
+      let alertsQuery;
+      if (userId) {
+        try {
+          alertsQuery = firestoreQuery(
+            alertsCollection,
+            where('userId', '==', userId),
+            orderBy('created_at', 'desc'),
+            limit(50)
+          );
+        } catch (orderByError) {
+          // Fallback without orderBy if index is missing
+          alertsQuery = firestoreQuery(
+            alertsCollection,
+            where('userId', '==', userId),
+            limit(50)
+          );
+        }
+      } else {
+        try {
+          alertsQuery = firestoreQuery(
+            alertsCollection,
+            orderBy('created_at', 'desc'),
+            limit(50)
+          );
+        } catch (orderByError) {
+          alertsQuery = firestoreQuery(alertsCollection, limit(50));
+        }
+      }
+      
       const alertsSnapshot = await getDocs(alertsQuery);
       
       if (!alertsSnapshot.empty) {
@@ -622,7 +718,7 @@ export class FirebaseService {
           id: doc.id,
           ...doc.data()
         }));
-        logger.info(MODULE, `Retrieved ${alerts.length} Alerts`);
+        logger.info(MODULE, `Retrieved ${alerts.length} Alerts for user ${userId || 'all'}`);
         return alerts;
       }
       
@@ -636,7 +732,19 @@ export class FirebaseService {
         logger.debug(MODULE, 'Retrying without orderBy...');
         try {
           const alertsCollection = collection(db, 'alerts');
-          const alertsSnapshot = await getDocs(alertsCollection);
+          let simpleQuery;
+          
+          if (userId) {
+            simpleQuery = firestoreQuery(
+              alertsCollection,
+              where('userId', '==', userId),
+              limit(50)
+            );
+          } else {
+            simpleQuery = firestoreQuery(alertsCollection, limit(50));
+          }
+          
+          const alertsSnapshot = await getDocs(simpleQuery);
           
           if (!alertsSnapshot.empty) {
             const alerts = alertsSnapshot.docs.map(doc => ({
@@ -655,14 +763,18 @@ export class FirebaseService {
     }
   }
 
-  // Save Alert to Firestore
-  static async saveAlert(alertData) {
+  // Save Alert to Firestore - USER-BASED
+  static async saveAlert(alertData, userId = null) {
     try {
       logger.debug(MODULE, 'Saving Alert to Firestore:', alertData);
       
       if (!db) {
         logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
+      }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
       }
       
       const alertId = alertData.id || `alert-${Date.now()}`;
@@ -671,6 +783,7 @@ export class FirebaseService {
       const dataToSave = {
         ...alertData,
         id: alertId,
+        userId: alertData.userId || userId || null,
         updated_at: new Date().toISOString(),
         created_at: alertData.created_at || new Date().toISOString()
       };
@@ -1430,14 +1543,18 @@ export class FirebaseService {
     }
   }
 
-  // ✅ Save SmartBin to Firestore
-  static async saveSmartBin(smartBinData) {
+  // ✅ Save SmartBin to Firestore - USER-BASED
+  static async saveSmartBin(smartBinData, userId = null) {
     try {
       logger.debug(MODULE, 'Saving SmartBin to Firestore:', smartBinData);
       
       if (!db) {
         logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
+      }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
       }
       
       // Generate ID if not provided
@@ -1446,10 +1563,11 @@ export class FirebaseService {
       // Extract compartments if they exist
       const compartments = smartBinData.compartments || [];
       
-      // Prepare SmartBin data (without separate compartments for now)
+      // Prepare SmartBin data with userId
       const smartBinPayload = {
         ...smartBinData,
         id: binId,
+        userId: smartBinData.userId || userId || null,
         updated_at: new Date().toISOString(),
         created_at: smartBinData.created_at || new Date().toISOString()
       };
@@ -1458,7 +1576,7 @@ export class FirebaseService {
       const binRef = doc(db, 'smart-bins', binId);
       await setDoc(binRef, smartBinPayload, { merge: true });
       
-      logger.success(MODULE, `SmartBin saved successfully: ${binId}`);
+      logger.success(MODULE, `SmartBin saved successfully: ${binId} for user ${userId}`);
       
       // If compartments are included, save them separately to the compartments collection
       if (compartments.length > 0) {
@@ -1475,9 +1593,10 @@ export class FirebaseService {
             id: compartmentId,
             smartBinId: binId,
             smartbin_id: binId,
+            userId: smartBinData.userId || userId || null,
             updated_at: new Date().toISOString(),
             created_at: comp.created_at || new Date().toISOString(),
-            created_by: smartBinData.created_by || 'admin@sortyx.com'
+            created_by: smartBinData.created_by || 'system'
           };
           
           const compartmentRef = doc(db, 'compartments', compartmentId);
@@ -1505,8 +1624,8 @@ export class FirebaseService {
     }
   }
 
-  // ✅ Save SingleBin to Firestore
-  static async saveSingleBin(singleBinData) {
+  // ✅ Save SingleBin to Firestore - USER-BASED
+  static async saveSingleBin(singleBinData, userId = null) {
     try {
       logger.debug(MODULE, 'Saving SingleBin to Firestore:', singleBinData);
       
@@ -1514,15 +1633,20 @@ export class FirebaseService {
         logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
+      }
       
       // Generate ID if not provided
       const binId = singleBinData.id || `single-bin-${Date.now()}`;
       const binRef = doc(db, 'single-bins', binId);
       
-      // Prepare data with timestamp
+      // Prepare data with timestamp and userId
       const dataToSave = {
         ...singleBinData,
         id: binId,
+        userId: singleBinData.userId || userId || null,
         updated_at: new Date().toISOString(),
         created_at: singleBinData.created_at || new Date().toISOString()
       };
@@ -1530,7 +1654,7 @@ export class FirebaseService {
       // Save to Firestore
       await setDoc(binRef, dataToSave, { merge: true });
       
-      logger.success(MODULE, `SingleBin saved successfully: ${binId}`);
+      logger.success(MODULE, `SingleBin saved successfully: ${binId} for user ${userId}`);
       return { id: binId, ...dataToSave };
       
     } catch (error) {
@@ -1539,8 +1663,8 @@ export class FirebaseService {
     }
   }
 
-  // ✅ Save Compartment to Firestore
-  static async saveCompartment(compartmentData) {
+  // ✅ Save Compartment to Firestore - USER-BASED
+  static async saveCompartment(compartmentData, userId = null) {
     try {
       logger.debug(MODULE, 'Saving Compartment to Firestore:', compartmentData);
       
@@ -1548,15 +1672,20 @@ export class FirebaseService {
         logger.error(MODULE, 'Firestore is not initialized');
         throw new Error('Firestore is not initialized');
       }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
+      }
       
       // Generate ID if not provided
       const compartmentId = compartmentData.id || `compartment-${Date.now()}`;
       const compartmentRef = doc(db, 'compartments', compartmentId);
       
-      // Prepare data with timestamp
+      // Prepare data with timestamp and userId
       const dataToSave = {
         ...compartmentData,
         id: compartmentId,
+        userId: compartmentData.userId || userId || null,
         updated_at: new Date().toISOString(),
         created_at: compartmentData.created_at || new Date().toISOString()
       };
@@ -1564,7 +1693,7 @@ export class FirebaseService {
       // Save to Firestore
       await setDoc(compartmentRef, dataToSave, { merge: true });
       
-      logger.success(MODULE, `Compartment saved successfully: ${compartmentId}`);
+      logger.success(MODULE, `Compartment saved successfully: ${compartmentId} for user ${userId}`);
       return { id: compartmentId, ...dataToSave };
       
     } catch (error) {

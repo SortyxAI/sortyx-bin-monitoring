@@ -334,13 +334,17 @@ export default function Dashboard() {
             initializedRef.current = true;
           }
         } else {
-          // Load real data - ✅ FIX: Use getCompartmentsWithSensorData() to enrich compartments with sensor data
+          // ✅ FIX: Pass userId to Firebase methods to enable user-based filtering
+          const userId = effectiveUser?.id || effectiveUser?.uid || null;
+          console.log("Loading data for user:", userId);
+          
+          // Load real data with user filtering
           const [smartBinData, compartmentData, singleBinData, alertData, firebaseSmartBins, firebaseSingleBins] = await Promise.all([
             SmartBin.list().catch(err => {
               console.error("SmartBin.list error:", err);
               return [];
             }),
-            FirebaseService.getCompartmentsWithSensorData().catch(err => {
+            FirebaseService.getCompartmentsWithSensorData(userId).catch(err => {
               console.error("FirebaseService.getCompartmentsWithSensorData error:", err);
               return [];
             }),
@@ -348,38 +352,66 @@ export default function Dashboard() {
               console.error("SingleBin.list error:", err);
               return [];
             }),
-            FirebaseService.getAlerts().catch(err => {
+            FirebaseService.getAlerts(userId).catch(err => {
               console.error("FirebaseService.getAlerts error:", err);
               return [];
             }),
-            FirebaseService.getSmartBins().catch(err => {
+            FirebaseService.getSmartBins(userId).catch(err => {
               console.error("FirebaseService.getSmartBins error:", err);
               return [];
             }),
-            FirebaseService.getSingleBinsWithSensorData().catch(err => {
+            FirebaseService.getSingleBinsWithSensorData(userId).catch(err => {
               console.error("FirebaseService.getSingleBinsWithSensorData error:", err);
               return [];
             })
           ]);
           
-          // Combine API data with Firebase data
-          const combinedSmartBins = [...smartBinData, ...firebaseSmartBins];
-          const combinedSingleBins = [...singleBinData, ...firebaseSingleBins];
+          // ✅ FIX: Properly deduplicate combined data using Map for O(1) lookups
+          // Use Map to track bins by ID and avoid duplicates
+          const smartBinsMap = new Map();
+          const singleBinsMap = new Map();
           
-          console.log("Firebase SmartBins:", firebaseSmartBins);
-          console.log("Firebase Compartments (with sensor data):", compartmentData);
-          console.log("Firebase SingleBins:", firebaseSingleBins);
-          console.log("Firebase Alerts:", alertData);
+          // Add Firebase bins first (they have the most recent sensor data)
+          firebaseSmartBins.forEach(bin => {
+            if (bin && bin.id) {
+              smartBinsMap.set(bin.id, { ...bin, source: 'firebase' });
+            }
+          });
           
-          console.log("Firebase API responses:", { 
-            smartBinData, 
-            compartmentData, 
-            singleBinData, 
-            alertData,
-            firebaseSmartBins,
-            firebaseSingleBins,
-            combinedSmartBins,
-            combinedSingleBins
+          // Add API bins only if they don't already exist
+          smartBinData.forEach(bin => {
+            if (bin && bin.id && !smartBinsMap.has(bin.id)) {
+              smartBinsMap.set(bin.id, { ...bin, source: 'api' });
+            }
+          });
+          
+          // Same for single bins - Firebase first
+          firebaseSingleBins.forEach(bin => {
+            if (bin && bin.id) {
+              singleBinsMap.set(bin.id, { ...bin, source: 'firebase' });
+            }
+          });
+          
+          // Add API single bins only if they don't already exist
+          singleBinData.forEach(bin => {
+            if (bin && bin.id && !singleBinsMap.has(bin.id)) {
+              singleBinsMap.set(bin.id, { ...bin, source: 'api' });
+            }
+          });
+          
+          // Convert Maps back to arrays
+          const combinedSmartBins = Array.from(smartBinsMap.values());
+          const combinedSingleBins = Array.from(singleBinsMap.values());
+          
+          console.log("✅ Deduplicated data:", { 
+            firebaseSmartBins: firebaseSmartBins.length,
+            apiSmartBins: smartBinData.length,
+            combinedSmartBins: combinedSmartBins.length,
+            firebaseSingleBins: firebaseSingleBins.length,
+            apiSingleBins: singleBinData.length,
+            combinedSingleBins: combinedSingleBins.length,
+            firebaseCompartments: compartmentData.length,
+            alerts: alertData.length
           });
 
           if (!isMounted) return;

@@ -118,59 +118,62 @@ export default function SmartBins() {
       const impersonatedUserStr = localStorage.getItem('impersonatedUser');
       const effectiveUser = impersonatedUserStr ? JSON.parse(impersonatedUserStr) : currentUser;
       
+      // ✅ FIX: Get userId to pass to Firebase methods for user-based filtering
+      const userId = effectiveUser?.id || effectiveUser?.uid || null;
+      console.log("SmartBins page - Loading data for user:", userId);
+      
       const [smartBinData, compartmentData, singleBinData, firebaseSmartBins, firebaseSingleBins] = await Promise.all([
         SmartBin.filter({ created_by: effectiveUser.email }).catch(() => []),
         Compartment.list('-created_date').catch(() => []),
         SingleBin.filter({ created_by: effectiveUser.email }).catch(() => []),
-        FirebaseService.getSmartBins().catch(() => []),
-        FirebaseService.getSingleBins().catch(() => [])
+        FirebaseService.getSmartBins(userId).catch(() => []),
+        FirebaseService.getSingleBins(userId).catch(() => [])
       ]);
       
-      // Combine API data with Firebase data, avoiding duplicates
-      const seenSmartBinIds = new Set();
-      const combinedSmartBins = [];
+      // ✅ FIX: Properly deduplicate combined data using Map for O(1) lookups
+      const smartBinsMap = new Map();
+      const singleBinsMap = new Map();
       
-      // Add API smart bins first
-      smartBinData.forEach(bin => {
-        if (!seenSmartBinIds.has(bin.id)) {
-          combinedSmartBins.push({ ...bin, source: 'api' });
-          seenSmartBinIds.add(bin.id);
-        }
-      });
-      
-      // Add Firebase smart bins, avoiding duplicates
+      // Add Firebase bins first (they have the most recent sensor data)
       firebaseSmartBins.forEach(bin => {
-        if (!seenSmartBinIds.has(bin.id)) {
-          combinedSmartBins.push({ ...bin, source: 'firebase' });
-          seenSmartBinIds.add(bin.id);
+        if (bin && bin.id) {
+          smartBinsMap.set(bin.id, { ...bin, source: 'firebase' });
         }
       });
       
-      // Same for single bins
-      const seenSingleBinIds = new Set();
-      const combinedSingleBins = [];
-      
-      // Add API single bins first
-      singleBinData.forEach(bin => {
-        if (!seenSingleBinIds.has(bin.id)) {
-          combinedSingleBins.push({ ...bin, source: 'api' });
-          seenSingleBinIds.add(bin.id);
+      // Add API bins only if they don't already exist
+      smartBinData.forEach(bin => {
+        if (bin && bin.id && !smartBinsMap.has(bin.id)) {
+          smartBinsMap.set(bin.id, { ...bin, source: 'api' });
         }
       });
       
-      // Add Firebase single bins, avoiding duplicates
+      // Same for single bins - Firebase first
       firebaseSingleBins.forEach(bin => {
-        if (!seenSingleBinIds.has(bin.id)) {
-          combinedSingleBins.push({ ...bin, source: 'firebase' });
-          seenSingleBinIds.add(bin.id);
+        if (bin && bin.id) {
+          singleBinsMap.set(bin.id, { ...bin, source: 'firebase' });
         }
       });
       
-      console.log("SmartBins page - Firebase data:", { 
-        firebaseSmartBins, 
-        firebaseSingleBins,
-        combinedSmartBins,
-        combinedSingleBins 
+      // Add API single bins only if they don't already exist
+      singleBinData.forEach(bin => {
+        if (bin && bin.id && !singleBinsMap.has(bin.id)) {
+          singleBinsMap.set(bin.id, { ...bin, source: 'api' });
+        }
+      });
+      
+      // Convert Maps back to arrays
+      const combinedSmartBins = Array.from(smartBinsMap.values());
+      const combinedSingleBins = Array.from(singleBinsMap.values());
+      
+      console.log("SmartBins page - ✅ Deduplicated data:", { 
+        firebaseSmartBins: firebaseSmartBins.length,
+        apiSmartBins: smartBinData.length,
+        combinedSmartBins: combinedSmartBins.length,
+        firebaseSingleBins: firebaseSingleBins.length,
+        apiSingleBins: singleBinData.length,
+        combinedSingleBins: combinedSingleBins.length,
+        compartments: compartmentData.length
       });
       
       setSmartBins(combinedSmartBins);
