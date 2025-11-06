@@ -111,11 +111,11 @@ const ImprovedAddBinModal = ({ isOpen, onClose, onAddBin, binType = 'single' }) 
          
    async function fetchBins(){
     try{
-      const user = User.me();
+      const user = await User.me();
       console.log("Current User: ", user);
       if(user?.applicationId){
         const binsData = await SmartBin.filter({
-          applicationId : (await user).applicationId,
+          applicationId : user.applicationId,
         });
         console.log("Bins Data User ", binsData);
         setAvailableDevices(binsData);

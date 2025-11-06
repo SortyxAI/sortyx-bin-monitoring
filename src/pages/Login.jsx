@@ -1,41 +1,83 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { User } from '../api/entities';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Alert } from '../components/ui/alert';
-import { Trash2, LogIn, Mail, Lock } from 'lucide-react';
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { User } from "../api/entities";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Alert } from "../components/ui/alert";
+import { Trash2, LogIn, Mail, Lock } from "lucide-react";
 import Logo from "../assets/Logo.jpeg";
 import DarkModeLogo from "../assets/Logo-darkmode.jpeg";
+import { firebaseAuth } from "../services/firebaseAuth";
 
-export default function Login({ onLogin }) {
-  const [email, setEmail] = useState('admin@sortyx.com');
-  const [password, setPassword] = useState('admin123');
+export default function Login({ onLogin, onNavigateToRegister }) {
+  const [email, setEmail] = useState("admin@sortyx.com");
+  const [password, setPassword] = useState("admin123");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    return saved === 'dark';
+    const saved = localStorage.getItem("theme");
+    return saved === "dark";
   });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
+
+    // try {
+    //   // Firebase Authentication login
+    //   const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    //   const user = userCredential.user;
+    //   console.log('✅ Firebase Auth Success:', user);
+
+    //   // Fetch additional user data from Firestore
+    //   const userDocRef = doc(db, 'users', user.uid);
+    //   const userDocSnap = await getDoc(userDocRef);
+    //   if(userDocSnap.exists()){
+    //     const userData = userDocSnap.data();
+    //     console.log('✅ Firestore User Data:', userData);
+
+    //     // Combine auth user and firestore data
+    //     const fullUserData ={
+    //       uid: user.uid,
+    //       email: user.email,
+    //       ...userData
+    //     };
+
+    //     onLogin(fullUserData);
+    //   }else{
+    //     console.warn("⚠️ No Firestore user data found for UID:", user.uid);
+    //     setError("User profile not found in Firestore.");
+    //   }
+
+    // } catch (error) {
+    //   console.error('❌ Login failed:', error);
+    //   setError(error.message || 'Login failed. Please check your credentials.');
+    // }finally{
+    //   setLoading(false);
+    // }
 
     try {
+      // const response = await User.login(email, password);
+      // const response = await firebaseAuth.login(email, password);
       const response = await User.login(email, password);
-      console.log('Login successful:', response);
+      console.log("Login successful:", response);
       onLogin(response.user);
     } catch (error) {
-      console.error('Login failed:', error);
-      setError(error.message || 'Login failed. Please check your credentials.');
+      console.error("Login failed:", error);
+      setError(error.message || "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-purple-50 to-indigo-50 dark:from-[#0F0818] dark:via-[#1a0a2e] dark:to-[#16213e] p-4">
@@ -47,7 +89,7 @@ export default function Login({ onLogin }) {
             scale: [1, 1.2, 1],
             opacity: [0.3, 0.6, 0.3],
             x: [0, 50, 0],
-            y: [0, -30, 0]
+            y: [0, -30, 0],
           }}
           transition={{
             duration: 8,
@@ -61,7 +103,7 @@ export default function Login({ onLogin }) {
             scale: [1.2, 1, 1.2],
             opacity: [0.2, 0.5, 0.2],
             x: [0, -40, 0],
-            y: [0, 40, 0]
+            y: [0, 40, 0],
           }}
           transition={{
             duration: 10,
@@ -89,11 +131,15 @@ export default function Login({ onLogin }) {
               <Trash2 className="w-10 h-10 text-white" />
             </motion.div> */}
             <div className="flex items-center justify-center">
-                  {isDarkMode ?
-                    <img src={DarkModeLogo} alt="Logo" className="w-16 h-15 rounded-full" />
-                    :
-                    <img src={Logo} alt="Logo" className="w-16 h-15 rounded-full" />
-                  }
+              {isDarkMode ? (
+                <img
+                  src={DarkModeLogo}
+                  alt="Logo"
+                  className="w-16 h-15 rounded-full"
+                />
+              ) : (
+                <img src={Logo} alt="Logo" className="w-16 h-15 rounded-full" />
+              )}
             </div>
             <CardTitle className="text-3xl font-bold bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-800 dark:from-purple-300 dark:via-indigo-300 dark:to-purple-500 bg-clip-text text-transparent">
               Sortyx Smart Bin
@@ -117,7 +163,10 @@ export default function Login({ onLogin }) {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-700 dark:text-purple-200">
+                <Label
+                  htmlFor="email"
+                  className="text-gray-700 dark:text-purple-200"
+                >
                   Email Address
                 </Label>
                 <div className="relative">
@@ -135,7 +184,10 @@ export default function Login({ onLogin }) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-gray-700 dark:text-purple-200">
+                <Label
+                  htmlFor="password"
+                  className="text-gray-700 dark:text-purple-200"
+                >
                   Password
                 </Label>
                 <div className="relative">
@@ -160,7 +212,11 @@ export default function Login({ onLogin }) {
                 {loading ? (
                   <motion.div
                     animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    transition={{
+                      duration: 1,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
                     className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
                   />
                 ) : (
@@ -170,12 +226,50 @@ export default function Login({ onLogin }) {
                   </>
                 )}
               </Button>
+
+              {/* register button */}
+
+              <div className="mt-4 text-center">
+                <p className="text-sm text-gray-700 dark:text-purple-200">
+                  Are you a new user?{" "}
+                  <Button
+                    variant="link"
+                    className="text-purple-600 dark:text-purple-400 p-0 h-auto"
+                    onClick={onNavigateToRegister} // 🎯 This is the key call
+                  >
+                    Create an Account
+                  </Button>
+                </p>
+              </div>
+
+              {/* <Button
+                type="submit"
+                disabled={loading}
+                onClick={handleRegister}
+                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-lg disabled:opacity-50"
+              >
+                {loading ? (
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
+                  />
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4 mr-2" />
+                    Sign Up
+                  </>
+                )}
+              </Button> */}
             </form>
 
             <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
-              <h4 className="font-medium text-blue-700 dark:text-blue-300 mb-2">Default Credentials:</h4>
+              <h4 className="font-medium text-blue-700 dark:text-blue-300 mb-2">
+                Default Credentials:
+              </h4>
               <p className="text-sm text-blue-600 dark:text-blue-400">
-                Email: admin@sortyx.com<br />
+                Email: admin@sortyx.com
+                <br />
                 Password: admin123
               </p>
             </div>

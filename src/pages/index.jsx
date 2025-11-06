@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from "./Layout.jsx";
 import Login from "./Login.jsx";
+import Register from './Register.jsx';
 
 import Dashboard from "./Dashboard";
 import SmartBins from "./SmartBins";
@@ -73,6 +74,7 @@ function PagesContent() {
     const location = useLocation();
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isRegister, setIsRegister] = useState(false);
     
     useEffect(() => {
         const checkAuth = async () => {
@@ -94,12 +96,22 @@ function PagesContent() {
     
     const handleLogin = (userData) => {
         setUser(userData);
+        setIsRegister(false);
     };
     
     const handleLogout = () => {
         User.logout();
         setUser(null);
+        setIsRegister(false);
     };
+
+    const handleNavigateToLogin = () => {
+        setIsRegister(false);
+    };
+
+    const handleNavigateToRegister = () => {
+        setIsRegister(true);
+    }
     
     if (loading) {
         return (
@@ -113,7 +125,21 @@ function PagesContent() {
     }
     
     if (!user) {
-        return <Login onLogin={handleLogin} />;
+        // return <Login onLogin={handleLogin} />;
+        // 🔑 Authentication Barrier: If not logged in, show Login OR Register
+        if (isRegister) {
+            // User is trying to register, pass the login handler to redirect to dashboard on success
+            return <Register 
+                       onLogin={handleLogin} 
+                       onNavigateToLogin={handleNavigateToLogin} 
+                   />;
+        } else {
+            // User is trying to login (default view)
+            return <Login 
+                       onLogin={handleLogin} 
+                       onNavigateToRegister={handleNavigateToRegister} // Pass new handler to switch to register
+                   />;
+        }
     }
     
     const currentPage = _getCurrentPage(location.pathname);

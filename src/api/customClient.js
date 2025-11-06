@@ -2,6 +2,7 @@
 // Now uses Firebase Realtime Database with IoT sensor data
 
 import { FirebaseService } from '../services/firebaseService';
+import { firebaseAuth } from '@/services/firebaseAuth';
 
 class FirebaseAPIClient {
   constructor() {
@@ -14,17 +15,46 @@ class FirebaseAPIClient {
       smartbin_order: []
     };
   }
+  
+  async login(email, password) {
+    try {
+      const result = await firebaseAuth.login(email, password);
+      this.user = result.user;
+      localStorage.setItem('auth_token', result.token);
+      return { token: result.token, user: this.user };
+    } catch (error) {
+      console.error('Login error: ', error);
+      throw error;
+    }
+  }
+
+  async register(email, password) {
+    try {
+      const result = await firebaseAuth.register(email, password);
+      this.user = result.user;
+      localStorage.setItem('auth_token', result.token);
+      return { token: result.token, user: this.user };
+    } catch (error) {
+      console.error('Register error: ', error);
+      throw error
+    }
+  }
+
+  async logout(){
+    this.logout();
+    localStorage.removeItem('auth_token');
+  }
 
   // Authentication methods using mock data
-  async login(email, password) {
-    // Simple mock authentication
-    if (email === 'admin@sortyx.com' && password === 'admin123') {
-      const token = 'mock-firebase-token';
-      localStorage.setItem('auth_token', token);
-      return { token, user: this.user };
-    }
-    throw new Error('Invalid credentials');
-  }
+  // async login(email, password) {
+  //   // Simple mock authentication
+  //   if (email === 'admin@sortyx.com' && password === 'admin123') {
+  //     const token = 'mock-firebase-token';
+  //     localStorage.setItem('auth_token', token);
+  //     return { token, user: this.user };
+  //   }
+  //   throw new Error('Invalid credentials');
+  // }
 
   async me() {
     return this.user;
@@ -165,6 +195,10 @@ export const User = {
   async login(email, password) {
     return await firebaseClient.login(email, password);
   },
+
+  async register(email, password) { // 👈 ADD THIS FUNCTION**
+    return await firebaseClient.register(email, password);
+  },
   
   async me() {
     return await firebaseClient.me();
