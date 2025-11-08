@@ -96,6 +96,9 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick, isExpan
 
   // Extract deviceId from multiple possible field names
   const deviceId = singleBin.deviceId || singleBin.device_id || singleBin.iot_device_id || null;
+  
+  // ✅ Get device name for display (fallback to deviceId if name not available)
+  const deviceName = singleBin.deviceName || deviceId;
 
   const binTypeColors = {
     recyclable: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
@@ -426,14 +429,14 @@ export default function SingleBinDashboardCard({ singleBin, onCardClick, isExpan
                       </div>
                     </div>
                     
-                    {/* Device ID Display */}
-                    {deviceId && (
+                    {/* Device Name Display */}
+                    {deviceName && (
                       <div className="bg-white/70 dark:bg-indigo-900/40 rounded px-2 py-1.5 border border-blue-300 dark:border-blue-600 mb-2">
                         <div className="flex items-center gap-1 mb-0.5">
                           <Wifi className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                          <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">Device ID</span>
+                          <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">IoT Device</span>
                         </div>
-                        <span className="font-mono text-xs text-blue-700 dark:text-blue-300 block break-all">{deviceId}</span>
+                        <span className="font-mono text-xs text-blue-700 dark:text-blue-300 block break-all">{deviceName}</span>
                       </div>
                     )}
                     

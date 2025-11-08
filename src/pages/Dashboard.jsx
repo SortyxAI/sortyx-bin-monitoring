@@ -208,8 +208,15 @@ export default function Dashboard() {
         if (sensorUpdateTimeoutRef.current) {
           clearTimeout(sensorUpdateTimeoutRef.current);
         }
+        // ✅ FIX: Filter out null/undefined unsubscribers before calling them
         unsubscribers.forEach(unsubscribe => {
-          if (unsubscribe) unsubscribe();
+          if (typeof unsubscribe === 'function') {
+            try {
+              unsubscribe();
+            } catch (error) {
+              console.error('Error unsubscribing:', error);
+            }
+          }
         });
       };
     } catch (error) {

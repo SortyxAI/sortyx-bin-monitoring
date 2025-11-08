@@ -132,31 +132,34 @@ const MultiCompartmentSmartBinModal = ({ isOpen, onClose, onSave, existingBin = 
   const loadAvailableDevices = async () => {
     try {
       setLoadingDevices(true);
+      
+      // Get current user and their configured IoT devices
       const currentUser = await User.me();
+      console.log('📍 Current user:', currentUser);
+      
+      // Check if admin is impersonating another user
       const impersonatedUserStr = localStorage.getItem('impersonatedUser');
       const effectiveUser = impersonatedUserStr ? JSON.parse(impersonatedUserStr) : currentUser;
-      const appId = effectiveUser.applicationId || effectiveUser.app_id || effectiveUser.appId || 'sortyx-iot';
       
-      const devices = await FirebaseService.getAvailableDevices(appId);
+      console.log('📡 Loading IoT devices from user profile configuration...');
       
-      // Get latest sensor data for each device
-      for (const device of devices) {
-        try {
-          const latestData = await FirebaseService.getLatestSensorData(device.deviceId);
-          if (latestData) {
-            device.sampleData = latestData;
-            device.status = 'online';
-          } else {
-            device.status = 'offline';
-          }
-        } catch (error) {
-          device.status = 'offline';
-        }
+      // Load devices from user's configured IoT device list using userId
+      const devices = await FirebaseService.getAvailableDevices(effectiveUser.userId);
+      console.log('📦 Available devices returned:', devices);
+
+      if (!devices || devices.length === 0) {
+        console.warn('⚠️ No IoT devices configured in user profile');
+        console.warn('💡 Please add IoT devices in Profile → IoT Devices section');
+        setAvailableDevices([]);
+        setLoadingDevices(false);
+        return;
       }
+
+      console.log('✅ Found', devices.length, 'configured IoT device(s)');
 
       setAvailableDevices(devices || []);
     } catch (error) {
-      console.error('Error loading devices:', error);
+      console.error('❌ Error loading devices:', error);
       setAvailableDevices([]);
     } finally {
       setLoadingDevices(false);
@@ -509,25 +512,40 @@ const MultiCompartmentSmartBinModal = ({ isOpen, onClose, onSave, existingBin = 
 
                       <div>
                         <Label>IoT Device <span className="text-red-500">*</span></Label>
-                        <Select
-                          value={compartmentForm.deviceId}
-                          onValueChange={(value) => setCompartmentForm({ ...compartmentForm, deviceId: value })}
-                        >
-                          <SelectTrigger className="mt-2">
-                            <SelectValue placeholder="Select IoT Device" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableDevices.map((device) => (
-                              <SelectItem key={device.deviceId} value={device.deviceId}>
-                                <div className="flex items-center gap-2">
-                                  <Wifi className="w-4 h-4 text-green-500" />
-                                  {device.deviceId}
-                                  <Badge variant="outline">{device.status}</Badge>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {loadingDevices ? (
+                          <div className="h-10 flex items-center justify-center border-2 border-dashed rounded-md mt-2">
+                            <span className="text-sm text-gray-500">Loading devices...</span>
+                          </div>
+                        ) : availableDevices.length === 0 ? (
+                          <div className="border-2 border-yellow-300 dark:border-yellow-600 bg-yellow-50 dark:bg-yellow-900/20 rounded-md p-3 mt-2">
+                            <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
+                              ⚠️ No IoT devices configured
+                            </p>
+                            <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                              Please add IoT devices in <strong>Profile → IoT Devices</strong> section first
+                            </p>
+                          </div>
+                        ) : (
+                          <Select
+                            value={compartmentForm.deviceId}
+                            onValueChange={(value) => setCompartmentForm({ ...compartmentForm, deviceId: value })}
+                          >
+                            <SelectTrigger className="mt-2">
+                              <SelectValue placeholder="Select IoT Device" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableDevices.map((device) => (
+                                <SelectItem key={device.deviceId} value={device.deviceId}>
+                                  <div className="flex items-center gap-2">
+                                    <Wifi className={`w-4 h-4 ${device.status === 'online' ? 'text-green-500' : 'text-gray-400'}`} />
+                                    {device.deviceId}
+                                    <Badge variant="outline">{device.status}</Badge>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
 
                       <div>

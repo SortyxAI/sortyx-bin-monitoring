@@ -80,32 +80,18 @@ export class FirebaseService {
       
       const knownPatterns = [
         'iot-devices', 'smart-bins', 'single-bins', 'compartments',
-        'alerts', 'users', 'all-sensor-data', 'sensor-data-*'
+        'alerts', 'users'
       ];
       
       const foundCollections = [];
       
       for (const pattern of knownPatterns) {
         try {
-          if (pattern.includes('*')) {
-            const basePattern = pattern.replace('*', '');
-            const deviceIds = ['sortyx-sensor-two', 'sortyx-sensor-three', 'sortyx-sensor-four','sortyx-sensor-five','plaese-work'];
-            for (const deviceId of deviceIds) {
-              const collectionName = `${basePattern}${deviceId}`;
-              const testRef = collection(db, collectionName);
-              const testSnapshot = await getDocs(firestoreQuery(testRef, limit(1)));
-              if (!testSnapshot.empty) {
-                foundCollections.push(collectionName);
-                logger.trace(MODULE, `Found collection: ${collectionName}`);
-              }
-            }
-          } else {
-            const testRef = collection(db, pattern);
-            const testSnapshot = await getDocs(firestoreQuery(testRef, limit(1)));
-            if (!testSnapshot.empty) {
-              foundCollections.push(pattern);
-              logger.trace(MODULE, `Found collection: ${pattern}`, { documents: testSnapshot.size });
-            }
+          const testRef = collection(db, pattern);
+          const testSnapshot = await getDocs(firestoreQuery(testRef, limit(1)));
+          if (!testSnapshot.empty) {
+            foundCollections.push(pattern);
+            logger.trace(MODULE, `Found collection: ${pattern}`, { documents: testSnapshot.size });
           }
         } catch (error) {
           logger.trace(MODULE, `Skipping collection: ${pattern}`);
@@ -158,9 +144,56 @@ export class FirebaseService {
     }
   }
 
+  // ✅ Helper: Get device name (collection name pattern) from device ID by checking user's configured devices
+  static async getDeviceNameById(deviceIdOrName, userId = null) {
+    try {
+      // If it already looks like a device name (not a numeric ID), return it
+      if (isNaN(deviceIdOrName)) {
+        logger.trace(MODULE, `Device identifier is already a name: ${deviceIdOrName}`);
+        return deviceIdOrName;
+      }
+
+      if (!userId) {
+        userId = await getCurrentUserId();
+      }
+
+      if (!userId) {
+        logger.warn(MODULE, 'No user ID provided to resolve device name');
+        return deviceIdOrName; // Fallback to original value
+      }
+
+      // Get user's configured devices
+      const userDoc = doc(db, 'users', userId);
+      const userSnapshot = await getDoc(userDoc);
+      
+      if (!userSnapshot.exists()) {
+        logger.warn(MODULE, 'User profile not found');
+        return deviceIdOrName;
+      }
+      
+      const userData = userSnapshot.data();
+      const configuredDevices = userData.iot_devices || [];
+      
+      // Find the device by ID
+      const device = configuredDevices.find(d => d.id === deviceIdOrName || d.id === String(deviceIdOrName));
+      
+      if (device && device.name) {
+        logger.success(MODULE, `Resolved device ID ${deviceIdOrName} to name: ${device.name}`);
+        return device.name; // This is the collection name pattern
+      }
+      
+      logger.warn(MODULE, `Could not resolve device ID ${deviceIdOrName} to a device name`);
+      return deviceIdOrName; // Fallback to original value
+      
+    } catch (error) {
+      logger.error(MODULE, 'Error resolving device name from ID:', error);
+      return deviceIdOrName; // Fallback to original value
+    }
+  }
+
   // Get latest sensor data for a specific device from FIRESTORE - OPTIMIZED
-  static async getLatestSensorData(deviceId = 'sortyx-sensor-two') {
-    logger.debug(MODULE, `Getting latest sensor data for device: ${deviceId}`);
+  static async getLatestSensorData(deviceIdOrName = 'sortyx-sensor-two', userId = null) {
+    logger.debug(MODULE, `Getting latest sensor data for device: ${deviceIdOrName}`);
     
     try {
       if (!db) {
@@ -168,7 +201,10 @@ export class FirebaseService {
         return null;
       }
       
-      const deviceCollection = `sensor-data-${deviceId}`;
+      // Resolve device ID to device name (collection name pattern) if needed
+      const deviceName = await this.getDeviceNameById(deviceIdOrName, userId);
+      const deviceCollection = `sensor-data-${deviceName}`;
+      
       logger.trace(MODULE, `Checking Firestore collection: ${deviceCollection}`);
       
       const deviceCollectionRef = collection(db, deviceCollection);
@@ -216,14 +252,14 @@ export class FirebaseService {
         if (!allSnapshot.empty) {
           const deviceDoc = allSnapshot.docs.find(doc => {
             const data = doc.data();
-            return data.deviceId === deviceId || 
-                   data.end_device_ids?.device_id === deviceId ||
-                   doc.id.includes(deviceId);
+            return data.deviceId === deviceName || 
+                   data.end_device_ids?.device_id === deviceName ||
+                   doc.id.includes(deviceName);
           });
           
           if (deviceDoc) {
             const latestData = deviceDoc.data();
-            logger.success(MODULE, `Found data in all-sensor-data for ${deviceId}`);
+            logger.success(MODULE, `Found data in all-sensor-data for ${deviceName}`);
             return this.formatSensorData(latestData);
           }
         }
@@ -235,20 +271,20 @@ export class FirebaseService {
         if (!allSnapshot.empty) {
           const deviceDoc = allSnapshot.docs.find(doc => {
             const data = doc.data();
-            return data.deviceId === deviceId || 
-                   data.end_device_ids?.device_id === deviceId ||
-                   doc.id.includes(deviceId);
+            return data.deviceId === deviceName || 
+                   data.end_device_ids?.device_id === deviceName ||
+                   doc.id.includes(deviceName);
           });
           
           if (deviceDoc) {
             const latestData = deviceDoc.data();
-            logger.success(MODULE, `Found data in all-sensor-data for ${deviceId} (unordered)`);
+            logger.success(MODULE, `Found data in all-sensor-data for ${deviceName} (unordered)`);
             return this.formatSensorData(latestData);
           }
         }
       }
       
-      logger.warn(MODULE, `No sensor data found for device: ${deviceId}`);
+      logger.warn(MODULE, `No sensor data found for device: ${deviceIdOrName} (resolved to: ${deviceName}, collection: ${deviceCollection})`);
       return null;
       
     } catch (error) {
@@ -262,85 +298,108 @@ export class FirebaseService {
     }
   }
 
-  // Get available IoT devices filtered by user's App ID
-  static async getAvailableDevices(userAppId = null) {
+  // Get available IoT devices from user's profile configuration - USER-BASED
+  static async getAvailableDevices(userId = null) {
     try {
-      logger.debug(MODULE, 'Getting available IoT devices', { appId: userAppId });
+      logger.debug(MODULE, 'Getting IoT devices from user profile configuration', { userId });
       
       if (!db) {
         logger.error(MODULE, 'Firestore is not initialized');
         return [];
       }
-      
-      logger.trace(MODULE, 'Discovering all sensor-data-* collections...');
-      
-      const allCollections = await this.discoverCollections();
-      const sensorDataCollections = allCollections.filter(name => 
-        name.startsWith('sensor-data-')
-      );
-      
-      logger.debug(MODULE, `Found ${sensorDataCollections.length} sensor-data-* collections`);
-      
-      if (sensorDataCollections.length === 0) {
-        logger.warn(MODULE, 'No sensor-data-* collections found');
+
+      if (!userId) {
+        userId = await getCurrentUserId();
+      }
+
+      if (!userId) {
+        logger.warn(MODULE, 'No user ID provided or found');
         return [];
       }
       
-      const deviceMap = new Map();
+      // Get user's profile to retrieve configured IoT devices
+      const userDoc = doc(db, 'users', userId);
+      const userSnapshot = await getDoc(userDoc);
       
-      for (const collectionName of sensorDataCollections) {
-        try {
-          logger.trace(MODULE, `Querying collection: ${collectionName}`);
-          
-          const collectionRef = collection(db, collectionName);
-          const q = firestoreQuery(collectionRef, limit(1));
-          const snapshot = await getDocs(q);
-          
-          if (!snapshot.empty) {
-            const latestDoc = snapshot.docs[0];
-            const data = latestDoc.data();
-            
-            const deviceId = collectionName.replace('sensor-data-', '') || 
-                           data.end_device_ids?.device_id || 
-                           data.deviceId;
-            
-            const appId = data.end_device_ids?.application_ids?.application_id || 
-                         data.applicationId || 
-                         data.application_id;
-            
-            if (userAppId && appId && appId !== userAppId) {
-              logger.trace(MODULE, `Skipping device ${deviceId} - applicationId mismatch`);
-              continue;
-            }
-            
-            const device = {
-              id: deviceId,
-              deviceId: deviceId,
-              collectionName: collectionName,
-              applicationId: appId,
-              lastSeen: data.received_at || data.receivedAt || new Date().toISOString(),
-              status: 'active',
-              latestData: this.formatSensorData(data)
-            };
-            
-            if (!deviceMap.has(deviceId)) {
-              deviceMap.set(deviceId, device);
-              logger.trace(MODULE, `Added device: ${deviceId}`, { appId: appId || 'N/A' });
-            }
-          }
-        } catch (collectionError) {
-          logger.debug(MODULE, `Error querying collection ${collectionName}:`, collectionError.message);
-        }
+      if (!userSnapshot.exists()) {
+        logger.warn(MODULE, 'User profile not found');
+        return [];
       }
       
-      const devices = Array.from(deviceMap.values());
+      const userData = userSnapshot.data();
+      const configuredDevices = userData.iot_devices || [];
       
-      logger.info(MODULE, `Retrieved ${devices.length} IoT devices`);
+      if (configuredDevices.length === 0) {
+        logger.info(MODULE, 'No IoT devices configured in user profile');
+        return [];
+      }
       
-      return devices;
+      logger.debug(MODULE, `Found ${configuredDevices.length} configured IoT devices in user profile`);
+      
+      // Enrich each device with latest sensor data
+      const enrichedDevices = await Promise.all(
+        configuredDevices.map(async (device) => {
+          try {
+            const deviceId = device.name; // device.name is the collection name pattern
+            const collectionName = `sensor-data-${deviceId}`;
+            
+            logger.trace(MODULE, `Checking sensor data for device: ${deviceId}`);
+            
+            // Try to get latest sensor data
+            const sensorData = await this.getLatestSensorData(deviceId);
+            
+            if (sensorData) {
+              logger.success(MODULE, `Device ${deviceId} has active sensor data`);
+              return {
+                id: device.id,
+                deviceId: deviceId,
+                name: deviceId,
+                type: device.type,
+                collectionName: collectionName,
+                applicationId: userData.applicationId || userData.app_id || userData.appId || null,
+                lastSeen: sensorData.timestamp,
+                status: 'online',
+                latestData: sensorData,
+                configured: true,
+                createdAt: device.created_at
+              };
+            } else {
+              logger.warn(MODULE, `Device ${deviceId} has no sensor data (offline)`);
+              return {
+                id: device.id,
+                deviceId: deviceId,
+                name: deviceId,
+                type: device.type,
+                collectionName: collectionName,
+                applicationId: userData.applicationId || userData.app_id || userData.appId || null,
+                lastSeen: null,
+                status: 'offline',
+                latestData: null,
+                configured: true,
+                createdAt: device.created_at
+              };
+            }
+          } catch (error) {
+            logger.error(MODULE, `Error enriching device ${device.name}:`, error);
+            return {
+              id: device.id,
+              deviceId: device.name,
+              name: device.name,
+              type: device.type,
+              collectionName: `sensor-data-${device.name}`,
+              status: 'error',
+              configured: true
+            };
+          }
+        })
+      );
+      
+      logger.info(MODULE, `Retrieved ${enrichedDevices.length} IoT devices from user configuration`);
+      
+      return enrichedDevices;
       
     } catch (error) {
-      logger.error(MODULE, 'Error fetching available devices:', error);
+      logger.error(MODULE, 'Error fetching available devices from user profile:', error);
       return [];
     }
   }
@@ -488,6 +547,21 @@ export class FirebaseService {
         return [];
       }
       
+      // Get user's configured IoT devices to map device IDs to names
+      const userDoc = doc(db, 'users', userId);
+      const userSnapshot = await getDoc(userDoc);
+      const userData = userSnapshot.exists() ? userSnapshot.data() : null;
+      const configuredDevices = userData?.iot_devices || [];
+      
+      // Create a map of device ID to device name for quick lookup
+      const deviceIdToNameMap = new Map();
+      configuredDevices.forEach(device => {
+        if (device.id && device.name) {
+          deviceIdToNameMap.set(device.id, device.name);
+          deviceIdToNameMap.set(String(device.id), device.name);
+        }
+      });
+      
       const enrichedSingleBins = await Promise.all(
         singleBins.map(async (singleBin) => {
           try {
@@ -498,15 +572,22 @@ export class FirebaseService {
               return singleBin;
             }
             
-            const sensorData = await this.getLatestSensorData(deviceId);
+            // Resolve device ID to device name
+            const deviceName = deviceIdToNameMap.get(deviceId) || deviceIdToNameMap.get(String(deviceId)) || deviceId;
+            
+            const sensorData = await this.getLatestSensorData(deviceId, userId);
             
             if (!sensorData) {
               logger.trace(MODULE, `No sensor data found for device ${deviceId}`);
-              return singleBin;
+              return {
+                ...singleBin,
+                deviceName: deviceName, // Add device name even if no sensor data
+              };
             }
             
             const enrichedBin = {
               ...singleBin,
+              deviceName: deviceName, // ✅ Add device name for display
               sensorValue: sensorData.distance,
               sensor_value: sensorData.distance,
               distance: sensorData.distance,
@@ -524,7 +605,7 @@ export class FirebaseService {
               sensor_data_available: true
             };
             
-            logger.success(MODULE, `Enriched SingleBin ${singleBin.id} with sensor data`);
+            logger.success(MODULE, `Enriched SingleBin ${singleBin.id} with sensor data and device name: ${deviceName}`);
             return enrichedBin;
             
           } catch (error) {
@@ -879,8 +960,8 @@ export class FirebaseService {
   }
 
   // Subscribe to real-time sensor data updates
-  static subscribeToSensorData(deviceId, callback) {
-    logger.debug(MODULE, `Subscribing to real-time updates for device: ${deviceId}`);
+  static async subscribeToSensorData(deviceIdOrName, callback, userId = null) {
+    logger.debug(MODULE, `Subscribing to real-time updates for device: ${deviceIdOrName}`);
     
     if (!db) {
       logger.error(MODULE, 'Firestore is not initialized');
@@ -888,7 +969,10 @@ export class FirebaseService {
     }
     
     try {
-      const deviceCollection = `sensor-data-${deviceId}`;
+      // Resolve device ID to device name if needed
+      const deviceName = await this.getDeviceNameById(deviceIdOrName, userId);
+      const deviceCollection = `sensor-data-${deviceName}`;
+      
       const deviceCollectionRef = collection(db, deviceCollection);
       const deviceQuery = firestoreQuery(
         deviceCollectionRef,
@@ -936,7 +1020,7 @@ export class FirebaseService {
         }
       );
       
-      logger.success(MODULE, 'Real-time subscription established');
+      logger.success(MODULE, `Real-time subscription established for ${deviceCollection}`);
       return unsubscribe;
       
     } catch (error) {
@@ -946,8 +1030,8 @@ export class FirebaseService {
   }
 
   // Get historical sensor data
-  static async getHistoricalData(deviceId, limitCount = 100) {
-    logger.debug(MODULE, `Getting historical data for device: ${deviceId}`, { limit: limitCount });
+  static async getHistoricalData(deviceIdOrName, limitCount = 100, userId = null) {
+    logger.debug(MODULE, `Getting historical data for device: ${deviceIdOrName}`, { limit: limitCount });
     
     try {
       if (!db) {
@@ -955,7 +1039,10 @@ export class FirebaseService {
         return [];
       }
       
-      const deviceCollection = `sensor-data-${deviceId}`;
+      // Resolve device ID to device name if needed
+      const deviceName = await this.getDeviceNameById(deviceIdOrName, userId);
+      const deviceCollection = `sensor-data-${deviceName}`;
+      
       const deviceCollectionRef = collection(db, deviceCollection);
       const deviceQuery = firestoreQuery(
         deviceCollectionRef,
@@ -970,11 +1057,11 @@ export class FirebaseService {
           const data = doc.data();
           return this.formatSensorData(data);
         });
-        logger.info(MODULE, `Retrieved ${historicalData.length} historical records`);
+        logger.info(MODULE, `Retrieved ${historicalData.length} historical records from ${deviceCollection}`);
         return historicalData;
       }
       
-      logger.debug(MODULE, 'No historical data found');
+      logger.debug(MODULE, `No historical data found in ${deviceCollection}`);
       return [];
       
     } catch (error) {
@@ -983,7 +1070,8 @@ export class FirebaseService {
       if (error.code === 'failed-precondition') {
         logger.debug(MODULE, 'Retrying without orderBy...');
         try {
-          const deviceCollection = `sensor-data-${deviceId}`;
+          const deviceName = await this.getDeviceNameById(deviceIdOrName, userId);
+          const deviceCollection = `sensor-data-${deviceName}`;
           const deviceCollectionRef = collection(db, deviceCollection);
           const simpleQuery = firestoreQuery(deviceCollectionRef, limit(limitCount));
           
