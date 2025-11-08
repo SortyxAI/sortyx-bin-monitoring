@@ -10,6 +10,7 @@ import ProfileDetails from "../components/profile/ProfileDetails";
 import SubscriptionInfo from "../components/profile/SubscriptionInfo";
 import NotificationPreferences from "../components/profile/NotificationPreferences";
 import UsageStats from "../components/profile/UsageStats";
+import IotDevicesManager from "../components/profile/IotDevicesManager";
 
 export default function Profile() {
   const [user, setUser] = useState(null);
@@ -68,6 +69,7 @@ export default function Profile() {
 
         {/* Right Column */}
         <div className="lg:col-span-2 space-y-8">
+          <IotDevicesManager user={user} onUpdate={handleUpdate} />
           <SubscriptionInfo user={user} />
           <NotificationPreferences user={user} onUpdate={handleUpdate} />
           <UsageStats />
