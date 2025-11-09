@@ -7,8 +7,10 @@ import { User } from "@/api/entities";
 import { FirebaseService } from "@/services/firebaseService";
 import { TestDataService } from "@/services/testDataService";
 import { motion, AnimatePresence } from "framer-motion";
-import "@/utils/debugFirestore";
-import "@/utils/testBinIntegration";
+// ✅ REMOVED: Debug imports that auto-execute on load
+// These are now available through DevTools only
+// import "@/utils/debugFirestore";
+// import "@/utils/testBinIntegration";
 import { 
   Trash2, 
   Activity,

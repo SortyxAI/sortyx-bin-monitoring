@@ -47,9 +47,11 @@ async function debugFirestoreData() {
   }
 }
 
-// Run the debug function immediately
-setTimeout(() => {
-  debugFirestoreData();
-}, 1000);
+// ✅ CHANGED: Expose to window for manual DevTools access only
+// No longer auto-executes on import
+if (typeof window !== 'undefined') {
+  window.debugFirestoreData = debugFirestoreData;
+  console.log('🔧 DevTools: debugFirestoreData() is available in the console');
+}
 
 export { debugFirestoreData };

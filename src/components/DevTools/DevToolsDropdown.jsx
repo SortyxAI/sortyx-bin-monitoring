@@ -30,10 +30,14 @@ import {
   CheckCircle,
   AlertCircle,
   Database,
-  RefreshCw
+  RefreshCw,
+  Bug,
+  FlaskConical
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TestDataService } from '@/services/testDataService';
+import { debugFirestoreData } from '@/utils/debugFirestore';
+import { testBinIntegration } from '@/utils/testBinIntegration';
 
 export default function DevToolsDropdown() {
   const { toast } = useToast();
@@ -331,6 +335,28 @@ export default function DevToolsDropdown() {
               <Trash2 className="w-4 h-4 mr-2" />
             )}
             Clear Test Data
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator className="dark:bg-purple-700" />
+
+          {/* Debug Firestore Data */}
+          <DropdownMenuItem 
+            onClick={debugFirestoreData}
+            disabled={isLoading}
+            className="dark:text-purple-100 dark:hover:bg-purple-500/20 cursor-pointer"
+          >
+            <Bug className="w-4 h-4 mr-2 text-red-500" />
+            Debug Firestore Data
+          </DropdownMenuItem>
+
+          {/* Test Bin Integration */}
+          <DropdownMenuItem 
+            onClick={testBinIntegration}
+            disabled={isLoading}
+            className="dark:text-purple-100 dark:hover:bg-purple-500/20 cursor-pointer"
+          >
+            <FlaskConical className="w-4 h-4 mr-2 text-yellow-500" />
+            Test Bin Integration
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
