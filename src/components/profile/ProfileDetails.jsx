@@ -1,11 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UploadFile } from "@/api/integrations";
-import { Pen, Copy, Check } from "lucide-react";
+import { Pen, Copy, Check, Shield, Crown } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { User } from "@/api/entities";
 
 export default function ProfileDetails({ user, onUpdate }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -13,11 +16,28 @@ export default function ProfileDetails({ user, onUpdate }) {
     full_name: user.full_name || "",
     phone: user.phone || "",
     profile_photo: user.profile_photo || "",
-    applicationId: user.applicationId || ""
+    applicationId: user.applicationId || "",
+    role: user.role || "user"
   });
   const [uploading, setUploading] = useState(false);
   const [copiedAppId, setCopiedAppId] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
   
+  useEffect(() => {
+    loadCurrentUser();
+  }, []);
+
+  const loadCurrentUser = async () => {
+    try {
+      const current = await User.me();
+      setCurrentUser(current);
+      setIsCurrentUserAdmin(current?.role === 'admin');
+    } catch (error) {
+      console.error("Failed to load current user:", error);
+    }
+  };
+
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -43,7 +63,8 @@ export default function ProfileDetails({ user, onUpdate }) {
       full_name: user.full_name || "",
       phone: user.phone || "",
       profile_photo: user.profile_photo || "",
-      applicationId: user.applicationId || ""
+      applicationId: user.applicationId || "",
+      role: user.role || "user"
     });
     setIsEditing(false);
   };
@@ -54,6 +75,22 @@ export default function ProfileDetails({ user, onUpdate }) {
       setCopiedAppId(true);
       setTimeout(() => setCopiedAppId(false), 2000);
     }
+  };
+
+  const getRoleBadge = (role) => {
+    if (role === 'admin') {
+      return (
+        <Badge className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
+          <Shield className="w-3 h-3 mr-1" />
+          Admin
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="dark:border-purple-600 dark:text-purple-300">
+        User
+      </Badge>
+    );
   };
 
   return (
@@ -131,6 +168,48 @@ export default function ProfileDetails({ user, onUpdate }) {
                 This ID is used to discover your IoT sensors with pattern: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">sensor-data-{formData.applicationId || '{appId}'}-*</code>
               </p>
             </div>
+            
+            {/* Role Field - Only editable for admins */}
+            <div className="space-y-2">
+              <Label htmlFor="role" className="flex items-center gap-2">
+                Role
+                {isCurrentUserAdmin && (
+                  <Crown className="w-3 h-3 text-yellow-500" />
+                )}
+              </Label>
+              {isCurrentUserAdmin ? (
+                <Select 
+                  value={formData.role} 
+                  onValueChange={(value) => setFormData(prev => ({...prev, role: value}))}
+                >
+                  <SelectTrigger className="dark:bg-[#1F0F2E] dark:border-purple-700 dark:text-purple-100">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-[#2A1F3D] dark:border-purple-700">
+                    <SelectItem value="user" className="dark:text-purple-100">User</SelectItem>
+                    <SelectItem value="admin" className="dark:text-purple-100">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-3 h-3" />
+                        Admin
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
+                  {getRoleBadge(formData.role)}
+                  <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                    (Only admins can change roles)
+                  </span>
+                </div>
+              )}
+              {isCurrentUserAdmin && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <Crown className="w-3 h-3" />
+                  As an admin, you can change user roles
+                </p>
+              )}
+            </div>
           </div>
         ) : (
           <div className="space-y-4 text-center">
@@ -141,6 +220,20 @@ export default function ProfileDetails({ user, onUpdate }) {
                 <span className="text-gray-700 dark:text-gray-300 font-medium">Phone:</span> {user.phone}
               </p>
             )}
+            
+            {/* Display Role */}
+            <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Role</p>
+              <div className="flex justify-center">
+                {getRoleBadge(user.role || 'user')}
+              </div>
+              {user.role === 'admin' && (
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-2">
+                  You have administrative privileges
+                </p>
+              )}
+            </div>
+            
             <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Application ID</p>
               {user.applicationId ? (

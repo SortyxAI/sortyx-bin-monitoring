@@ -1,13 +1,13 @@
-
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Settings, CreditCard, Bell, Key, Globe, UserCog, ChevronRight, LayoutDashboard } from "lucide-react";
+import { Users, Settings, CreditCard, Bell, Key, Globe, UserCog, ChevronRight, LayoutDashboard, Wrench } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UserImpersonation from "../components/admin/UserImpersonation";
+import DevToolsPanel from "../components/DevTools/DevToolsPanel";
 
 const adminFeatures = [
   {
@@ -87,95 +87,78 @@ export default function Admin() {
             <span className="sm:hidden">Impersonate</span>
           </TabsTrigger>
           <TabsTrigger 
-            value="users" 
-            className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-cyan-600 data-[state=active]:text-white dark:data-[state=active]:from-blue-500 dark:data-[state=active]:to-cyan-500 transition-all duration-300 py-3 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-blue-800/30"
+            value="devtools" 
+            className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-600 data-[state=active]:to-teal-600 data-[state=active]:text-white dark:data-[state=active]:from-green-500 dark:data-[state=active]:to-teal-500 transition-all duration-300 py-3 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-green-800/30"
           >
-            <Users className="w-4 h-4 mr-2" />
-            <span className="hidden sm:inline">User Management</span>
-            <span className="sm:hidden">Users</span>
+            <Wrench className="w-4 h-4 mr-2" />
+            <span className="hidden sm:inline">DevTools</span>
+            <span className="sm:hidden">Dev</span>
           </TabsTrigger>
         </TabsList>
 
-        <AnimatePresence mode="wait">
-          <TabsContent value="overview" className="space-y-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {adminFeatures.map((feature, index) => (
-                  <motion.div
-                    key={feature.title}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    <Link to={feature.url} className="block h-full group">
-                      <Card className="h-full hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-600 transition-all duration-300 dark:bg-[#241B3A] dark:border-purple-700 group-hover:scale-[1.02]">
-                        <CardHeader>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className={`p-3 bg-gray-100 dark:bg-purple-800/50 rounded-lg ${feature.color} group-hover:scale-110 transition-transform`}>
-                                <feature.icon className="w-6 h-6" />
-                              </div>
-                              <CardTitle className="dark:text-white">{feature.title}</CardTitle>
+        <TabsContent value="overview" className="space-y-6">
+          <motion.div
+            key="overview-content"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {adminFeatures.map((feature, index) => (
+                <motion.div
+                  key={feature.title}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <Link to={feature.url} className="block h-full group">
+                    <Card className="h-full hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-600 transition-all duration-300 dark:bg-[#241B3A] dark:border-purple-700 group-hover:scale-[1.02]">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={`p-3 bg-gray-100 dark:bg-purple-800/50 rounded-lg ${feature.color} group-hover:scale-110 transition-transform`}>
+                              <feature.icon className="w-6 h-6" />
                             </div>
-                            <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+                            <CardTitle className="dark:text-white">{feature.title}</CardTitle>
                           </div>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="text-gray-600 dark:text-gray-300">{feature.description}</p>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          </TabsContent>
-
-          <TabsContent value="impersonate" className="space-y-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <UserImpersonation />
-            </motion.div>
-          </TabsContent>
-
-          <TabsContent value="users" className="space-y-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Card className="dark:bg-[#241B3A] dark:border-purple-700">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 dark:text-white">
-                    <Users className="w-5 h-5 text-blue-600" />
-                    Quick Access to User Management
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-300 mb-4">
-                    Manage all user accounts, roles, and permissions from the dedicated User Management page.
-                  </p>
-                  <Link to={createPageUrl("Users")}>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      <Users className="w-4 h-4 mr-2" />
-                      Go to User Management
-                    </Button>
+                          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-gray-600 dark:text-gray-300">{feature.description}</p>
+                      </CardContent>
+                    </Card>
                   </Link>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </TabsContent>
-        </AnimatePresence>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        </TabsContent>
+
+        <TabsContent value="impersonate" className="space-y-6">
+          <motion.div
+            key="impersonate-content"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <UserImpersonation />
+          </motion.div>
+        </TabsContent>
+
+        <TabsContent value="devtools" className="space-y-6">
+          <motion.div
+            key="devtools-content"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <DevToolsPanel />
+          </motion.div>
+        </TabsContent>
       </Tabs>
     </div>
   );

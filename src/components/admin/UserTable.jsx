@@ -51,6 +51,26 @@ export default function UserTable({ users, loading, onEdit, onDelete }) {
     }
   };
 
+  // ✅ NEW: Helper function to safely format dates
+  const formatJoinDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    
+    try {
+      // Handle multiple date field names
+      const date = new Date(dateString);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return 'N/A';
+      }
+      
+      return format(date, "MMM dd, yyyy");
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'N/A';
+    }
+  };
+
   if (loading) {
     return <div className="text-center py-8 text-gray-600 dark:text-gray-300">Loading users...</div>;
   }
@@ -88,7 +108,7 @@ export default function UserTable({ users, loading, onEdit, onDelete }) {
               <TableCell>{getRoleBadge(user.role)}</TableCell>
               <TableCell>{getStatusBadge(user.status)}</TableCell>
               <TableCell>{getSubscriptionBadge(user.subscription_plan)}</TableCell>
-              <TableCell className="dark:text-gray-300">{format(new Date(user.created_date), "MMM dd, yyyy")}</TableCell>
+              <TableCell className="dark:text-gray-300">{formatJoinDate(user.created_at || user.created_date || user.createdAt)}</TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

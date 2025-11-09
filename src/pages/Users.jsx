@@ -168,19 +168,6 @@ export default function Users() {
         <p className="text-gray-600 dark:text-gray-300 mt-1">View, edit, and manage all user accounts.</p>
       </motion.div>
 
-      {/* Subscription Info */}
-      {!isPremiumUser && (
-        <Alert className="mb-6 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
-          <Crown className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-800 dark:text-blue-200">
-            <span className="font-semibold">Basic Plan:</span> Some user management features require a premium subscription. 
-            <Button variant="link" className="p-0 h-auto text-blue-700 dark:text-blue-300 underline ml-1">
-              Upgrade to unlock all features
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
       {/* Status Messages */}
       {message.text && (
         <motion.div

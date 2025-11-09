@@ -31,7 +31,7 @@ export default function UserEditDialog({ user, onOpenChange, onSave }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
-  const [canEditRoles, setCanEditRoles] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false); // ✅ Changed from canEditRoles
 
   useEffect(() => {
     loadCurrentUser();
@@ -41,8 +41,8 @@ export default function UserEditDialog({ user, onOpenChange, onSave }) {
     try {
       const user = await User.me();
       setCurrentUser(user);
-      // Check if current user can edit roles - for now, we'll assume premium/enterprise users can
-      setCanEditRoles(user.subscription_plan === 'premium' || user.subscription_plan === 'enterprise');
+      // ✅ Check if current user is admin (not based on subscription)
+      setIsAdmin(user.role === 'admin');
     } catch (error) {
       console.error("Failed to load current user:", error);
     }
@@ -79,7 +79,7 @@ export default function UserEditDialog({ user, onOpenChange, onSave }) {
       };
 
       // Only include role if user has permission to edit roles
-      if (canEditRoles) {
+      if (isAdmin) {
         updateData.role = formData.role;
       }
 
@@ -130,18 +130,7 @@ export default function UserEditDialog({ user, onOpenChange, onSave }) {
           </Alert>
         )}
 
-        {/* Subscription Warning */}
-        {!canEditRoles && (
-          <Alert className="border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20">
-            <Crown className="h-4 w-4 text-yellow-600" />
-            <AlertDescription className="text-yellow-800 dark:text-yellow-200">
-              <span className="font-semibold">Premium Feature:</span> User role management requires a premium subscription. 
-              <Button variant="link" className="p-0 h-auto text-yellow-700 dark:text-yellow-300 underline ml-1">
-                Upgrade now
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* ✅ REMOVED: Premium subscription warning - admins can edit roles regardless of subscription */}
         
         <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto">
           {/* Basic Information */}
@@ -209,14 +198,14 @@ export default function UserEditDialog({ user, onOpenChange, onSave }) {
               <div className="space-y-2">
                 <Label htmlFor="role" className="dark:text-gray-200 flex items-center gap-2">
                   User Role
-                  {!canEditRoles && <Lock className="w-3 h-3 text-gray-400" />}
+                  {!isAdmin && <Lock className="w-3 h-3 text-gray-400" />}
                 </Label>
                 <Select 
                   value={formData.role} 
                   onValueChange={(value) => handleChange('role', value)}
-                  disabled={!canEditRoles}
+                  disabled={!isAdmin}
                 >
-                  <SelectTrigger className={`dark:bg-[#1F1235] dark:border-purple-600 dark:text-white ${!canEditRoles ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  <SelectTrigger className={`dark:bg-[#1F1235] dark:border-purple-600 dark:text-white ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="dark:bg-[#241B3A] dark:border-purple-700">
@@ -224,8 +213,11 @@ export default function UserEditDialog({ user, onOpenChange, onSave }) {
                     <SelectItem value="admin" className="dark:text-gray-200">Admin</SelectItem>
                   </SelectContent>
                 </Select>
-                {!canEditRoles && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Premium feature - upgrade to edit roles</p>
+                {/* ✅ Updated message - only admins can edit roles, not subscription-based */}
+                {isAdmin ? (
+                  <p className="text-xs text-green-600 dark:text-green-400">✓ You can change user roles as an admin</p>
+                ) : (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Only admins can change user roles</p>
                 )}
               </div>
               

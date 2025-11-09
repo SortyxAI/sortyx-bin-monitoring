@@ -10,7 +10,7 @@ import {
   sendPasswordResetEmail,
   updateProfile
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 class FirebaseAPIClient {
@@ -108,6 +108,7 @@ class FirebaseAPIClient {
         userId: userId,
         plan: userData.plan || 'free',
         subscription_plan: userData.subscription_plan || 'free',
+        role: userData.role || 'user', // ✅ Add role field, default to 'user'
         applicationId: userData.applicationId || null,
         smartbin_order: userData.smartbin_order || [],
         created_at: userData.created_at || new Date().toISOString(),
@@ -348,6 +349,76 @@ export const User = {
   
   async updateMyUserData(data) {
     return await firebaseClient.updateMyUserData(data);
+  },
+  
+  // ✅ NEW: Admin function to list all users
+  async list() {
+    try {
+      const currentUser = await firebaseClient.me();
+      
+      // Check if user is admin
+      if (currentUser?.role !== 'admin') {
+        console.warn('⚠️ Non-admin user attempted to list all users');
+        return [];
+      }
+      
+      const usersCollection = collection(db, 'users');
+      const usersSnapshot = await getDocs(usersCollection);
+      
+      const users = [];
+      usersSnapshot.forEach((doc) => {
+        users.push({ id: doc.id, ...doc.data() });
+      });
+      
+      console.log(`✅ Loaded ${users.length} users`);
+      return users;
+    } catch (error) {
+      console.error('❌ Error listing users:', error);
+      throw error;
+    }
+  },
+  
+  // ✅ NEW: Admin function to update any user's profile
+  async update(userId, data) {
+    try {
+      const currentUser = await firebaseClient.me();
+      
+      // Check if user is admin
+      if (currentUser?.role !== 'admin') {
+        throw new Error('Permission denied: Only admins can update user profiles');
+      }
+      
+      const userDocRef = doc(db, 'users', userId);
+      const updateData = {
+        ...data,
+        updated_at: new Date().toISOString()
+      };
+      
+      await updateDoc(userDocRef, updateData);
+      
+      console.log(`✅ User ${userId} updated by admin`);
+      return { id: userId, ...updateData };
+    } catch (error) {
+      console.error('❌ Error updating user:', error);
+      throw error;
+    }
+  },
+  
+  // ✅ NEW: Admin function to get any user's profile
+  async get(userId) {
+    try {
+      const currentUser = await firebaseClient.me();
+      
+      // Check if user is admin
+      if (currentUser?.role !== 'admin') {
+        throw new Error('Permission denied: Only admins can view other user profiles');
+      }
+      
+      return await firebaseClient.getUserProfile(userId);
+    } catch (error) {
+      console.error('❌ Error getting user:', error);
+      throw error;
+    }
   },
   
   async resetPassword(email) {

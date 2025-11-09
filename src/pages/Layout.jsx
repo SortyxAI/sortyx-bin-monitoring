@@ -5,7 +5,7 @@ import { User } from "@/api/entities";
 // import { Logo } from "@/assets/Logo.jpeg"
 import Logo from "@/assets/Logo.jpeg"
 import DarkModeLogo from "@/assets/Logo-darkmode.jpeg"
-import DevToolsDropdown from "@/components/DevTools/DevToolsDropdown";
+// Remove DevToolsDropdown import
 import { 
   LayoutDashboard, 
   Settings, 
@@ -65,14 +65,9 @@ const navigationItems = [
 
 const adminItems = [
   {
-    title: "Admin Panel",
+    title: "Admin",
     url: createPageUrl("Admin"),
     icon: Settings,
-  },
-  {
-    title: "Users",
-    url: createPageUrl("Users"),
-    icon: Users,
   },
 ];
 
@@ -282,16 +277,15 @@ export default function Layout({ children, currentPageName }) {
                     <span className="relative z-10">
                       <item.icon className={`w-4 h-4 ${location.pathname === item.url ? 'text-white' : 'text-purple-600 dark:text-purple-300'}`} />
                     </span>
-                    {/* <span className="relative z-10">
+                    <span className="relative z-10">
                       {item.title}
-                    </span> */}
+                    </span>
                   </Link>
                 </motion.div>
               ))}
             </nav>
 
-            {/* DevTools Dropdown */}
-            <DevToolsDropdown />
+            {/* Remove DevTools Dropdown */}
 
             {/* User Menu */}
             <div className="flex items-center gap-2">
