@@ -14,10 +14,10 @@ const StatItem = ({ label, value, icon: Icon }) => (
 
 export default function UsageStats() {
   return (
-    <Card>
+    <Card className="dark:bg-[#241B3A] dark:border-purple-700">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <BarChart className="w-5 h-5 text-purple-600" />
+          <BarChart className="w-5 h-5 text-purple-600 dark:text-purple-400" />
           Usage Statistics
         </CardTitle>
       </CardHeader>

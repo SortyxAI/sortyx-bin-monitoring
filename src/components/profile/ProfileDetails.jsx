@@ -94,7 +94,7 @@ export default function ProfileDetails({ user, onUpdate }) {
   };
 
   return (
-    <Card>
+    <Card className="dark:bg-[#241B3A] dark:border-purple-700">
       <CardHeader>
         <CardTitle>Personal Information</CardTitle>
       </CardHeader>

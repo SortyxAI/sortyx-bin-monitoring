@@ -108,9 +108,15 @@ class FirebaseAPIClient {
         userId: userId,
         plan: userData.plan || 'free',
         subscription_plan: userData.subscription_plan || 'free',
-        role: userData.role || 'user', // ✅ Add role field, default to 'user'
+        role: userData.role || 'user',
         applicationId: userData.applicationId || null,
         smartbin_order: userData.smartbin_order || [],
+        // ✅ Add notification preference fields
+        email_alert_enabled: userData.email_alert_enabled ?? true,
+        sms_alert_enabled: userData.sms_alert_enabled ?? false,
+        whatsapp_alert_enabled: userData.whatsapp_alert_enabled ?? false,
+        alert_email: userData.alert_email || userData.email || '',
+        alert_phone: userData.alert_phone || '',
         created_at: userData.created_at || new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
