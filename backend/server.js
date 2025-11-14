@@ -287,7 +287,7 @@ app.post('/api/send-welcome-email', async (req, res) => {
   }
 });
 
-app.post('/api/send-alert-email', authenticateToken, async (req, res) => {
+app.post('/api/send-alert-email', async (req, res) => {
   try {
     const { email, userName, alertDetails } = req.body;
     
@@ -295,10 +295,12 @@ app.post('/api/send-alert-email', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Email and alert details are required' });
     }
 
+    console.log(`🚨 Sending alert email to: ${email} for ${alertDetails.binName}`);
     await emailService.sendAlertEmail(email, userName || 'User', alertDetails);
+    console.log(`✅ Alert email sent successfully to: ${email}`);
     res.json({ success: true, message: 'Alert email sent successfully' });
   } catch (error) {
-    console.error('Error sending alert email:', error);
+    console.error('❌ Error sending alert email:', error);
     res.status(500).json({ error: 'Failed to send email', details: error.message });
   }
 });
