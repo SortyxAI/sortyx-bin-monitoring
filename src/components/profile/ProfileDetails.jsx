@@ -94,22 +94,29 @@ export default function ProfileDetails({ user, onUpdate }) {
   };
 
   return (
-    <Card className="dark:bg-[#241B3A] dark:border-purple-700">
-      <CardHeader>
-        <CardTitle>Personal Information</CardTitle>
+    <Card className="overflow-hidden shadow-xl border-2 border-purple-200 dark:border-purple-700 dark:bg-[#241B3A]">
+      {/* Yellow gradient header matching the image */}
+      <CardHeader className="bg-gradient-to-br from-yellow-300 via-yellow-400 to-yellow-500 text-gray-900 border-b-4 border-yellow-600 relative overflow-hidden">
+        <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+        <div className="absolute -top-24 -right-24 w-48 h-48 bg-white/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-white/20 rounded-full blur-2xl"></div>
+        
+        <div className="relative">
+          <CardTitle className="text-xl font-bold text-gray-900">Personal Information</CardTitle>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 p-6 bg-gradient-to-br from-yellow-50 via-white to-purple-50 dark:from-yellow-950/10 dark:via-[#1a1325] dark:to-purple-950/10">
         <div className="flex flex-col items-center">
           <div className="relative">
-            <Avatar className="h-24 w-24">
+            <Avatar className="h-24 w-24 border-4 border-purple-300 dark:border-purple-500 shadow-lg">
               <AvatarImage src={formData.profile_photo} />
-              <AvatarFallback className="text-3xl bg-purple-200">
+              <AvatarFallback className="text-3xl bg-gradient-to-br from-purple-200 via-purple-300 to-blue-200 dark:from-purple-800 dark:via-purple-700 dark:to-blue-800 text-purple-900 dark:text-purple-100 font-bold">
                 {user.full_name?.[0] || user.email[0].toUpperCase()}
               </AvatarFallback>
             </Avatar>
             {isEditing && (
-              <label htmlFor="photo-upload" className="absolute -bottom-1 -right-1 bg-white p-1 rounded-full border cursor-pointer">
-                <Pen className="w-4 h-4 text-gray-600" />
+              <label htmlFor="photo-upload" className="absolute -bottom-1 -right-1 bg-yellow-400 hover:bg-yellow-500 p-2 rounded-full border-2 border-white dark:border-purple-900 cursor-pointer shadow-lg transition-all hover:scale-110">
+                <Pen className="w-4 h-4 text-gray-900" />
                 <input id="photo-upload" type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
               </label>
             )}
@@ -261,14 +268,14 @@ export default function ProfileDetails({ user, onUpdate }) {
           </div>
         )}
       </CardContent>
-      <CardFooter>
+      <CardFooter className="bg-yellow-50/50 dark:bg-yellow-950/10 border-t-2 border-yellow-200 dark:border-yellow-800 p-4">
         {isEditing ? (
           <div className="flex w-full gap-2">
-            <Button variant="outline" onClick={handleCancel} className="flex-1">Cancel</Button>
-            <Button onClick={handleSave} className="flex-1 bg-purple-600 hover:bg-purple-700">Save Changes</Button>
+            <Button variant="outline" onClick={handleCancel} className="flex-1 border-2 border-purple-300 dark:border-purple-600">Cancel</Button>
+            <Button onClick={handleSave} className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg font-semibold">Save Changes</Button>
           </div>
         ) : (
-          <Button variant="outline" onClick={() => setIsEditing(true)} className="w-full">
+          <Button variant="outline" onClick={() => setIsEditing(true)} className="w-full border-2 border-yellow-400 bg-yellow-50 hover:bg-yellow-100 text-gray-900 dark:bg-yellow-900/20 dark:border-yellow-600 dark:text-yellow-200 dark:hover:bg-yellow-900/30 font-semibold">
             Edit Profile
           </Button>
         )}

@@ -293,12 +293,30 @@ app.post('/api/send-welcome-email', async (req, res) => {
     }
 
     console.log(`📧 Sending welcome email to: ${email} (${userName})`);
-    await emailService.sendWelcomeEmail(email, userName || 'User');
+    
+    // Try to send email, but handle gracefully if it fails
+    const result = await emailService.sendWelcomeEmail(email, userName || 'User');
+    
+    if (result && result.success === false) {
+      // Email service is disabled (e.g., Render free tier)
+      console.warn(`⚠️ Email service disabled - welcome email not sent to: ${email}`);
+      return res.json({ 
+        success: false, 
+        message: 'Email service is currently unavailable (Render free tier limitation)',
+        error: result.error 
+      });
+    }
+    
     console.log(`✅ Welcome email sent successfully to: ${email}`);
     res.json({ success: true, message: 'Welcome email sent successfully' });
   } catch (error) {
-    console.error('❌ Error sending welcome email:', error);
-    res.status(500).json({ error: 'Failed to send email', details: error.message });
+    console.error('❌ Error sending welcome email:', error.message);
+    // Don't fail the request - just log and return success: false
+    res.json({ 
+      success: false, 
+      message: 'Email service unavailable', 
+      error: error.message 
+    });
   }
 });
 
@@ -311,12 +329,30 @@ app.post('/api/send-alert-email', async (req, res) => {
     }
 
     console.log(`🚨 Sending alert email to: ${email} for ${alertDetails.binName}`);
-    await emailService.sendAlertEmail(email, userName || 'User', alertDetails);
+    
+    // Try to send email, but handle gracefully if it fails
+    const result = await emailService.sendAlertEmail(email, userName || 'User', alertDetails);
+    
+    if (result && result.success === false) {
+      // Email service is disabled (e.g., Render free tier)
+      console.warn(`⚠️ Email service disabled - alert email not sent to: ${email}`);
+      return res.json({ 
+        success: false, 
+        message: 'Email service is currently unavailable (Render free tier limitation)',
+        error: result.error 
+      });
+    }
+    
     console.log(`✅ Alert email sent successfully to: ${email}`);
     res.json({ success: true, message: 'Alert email sent successfully' });
   } catch (error) {
-    console.error('❌ Error sending alert email:', error);
-    res.status(500).json({ error: 'Failed to send email', details: error.message });
+    console.error('❌ Error sending alert email:', error.message);
+    // Don't fail the request - just log and return success: false
+    res.json({ 
+      success: false, 
+      message: 'Email service unavailable', 
+      error: error.message 
+    });
   }
 });
 

@@ -2,41 +2,18 @@ const nodemailer = require('nodemailer');
 
 class EmailService {
   constructor() {
-    // Log environment check
-    console.log('🔧 Initializing Email Service...');
-    
-    // Email credentials with direct fallback values
-    const emailUser = process.env.EMAIL_USER || 'admin@sortyx.com';
-    const emailPassword = process.env.EMAIL_PASSWORD || 'Admin@Sortyx2025!';
-    const emailHost = process.env.EMAIL_HOST || 'smtp.hostinger.com';
-    const emailPort = Number(process.env.EMAIL_PORT || 587);
-    
-    console.log('📧 EMAIL_USER:', emailUser);
-    console.log('🔑 EMAIL_PASSWORD:', '****' + emailPassword.slice(-4));
-    console.log('🌐 EMAIL_HOST:', emailHost);
-    console.log('🔌 EMAIL_PORT:', emailPort);
-    
-    // Flag to track if email is disabled
-    this.emailDisabled = false;
-    
-    // Configure the SMTP transporter
-    const isSecurePort = emailPort === 465;
-    
+    // Configure the SMTP transporter with Hostinger settings
     this.transporter = nodemailer.createTransport({
-      host: emailHost,
-      port: emailPort,
-      secure: isSecurePort,
+      host: 'smtp.hostinger.com',
+      port: 465,
+      secure: true, // SSL
       auth: {
-        user: emailUser,
-        pass: emailPassword
+        user: process.env.EMAIL_USER || 'admin@sortyx.com',
+        pass: process.env.EMAIL_PASSWORD || 'Admin@Sortyx2025!'
       },
       tls: {
         rejectUnauthorized: false
-      },
-      requireTLS: !isSecurePort,
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000
+      }
     });
 
     // Verify the connection on initialization
@@ -46,37 +23,11 @@ class EmailService {
   async verifyConnection() {
     try {
       await this.transporter.verify();
-      const emailPort = process.env.EMAIL_PORT || 587;
-      const emailHost = process.env.EMAIL_HOST || 'smtp.hostinger.com';
       console.log('✅ Email service is ready to send emails');
-      console.log(`✅ Connected to SMTP server: ${emailHost}:${emailPort}`);
     } catch (error) {
       console.error('❌ Email service connection error:', error.message);
-      console.error('❌ Error code:', error.code);
-      console.warn('⚠️  Email notifications will not be sent.');
-      
-      // Check if it's a Render free tier SMTP blocking issue
-      if (error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
-        console.warn('');
-        console.warn('🚨 RENDER FREE TIER LIMITATION DETECTED 🚨');
-        console.warn('─'.repeat(60));
-        console.warn('⚠️  Render free tier blocks outbound SMTP connections');
-        console.warn('⚠️  This is a security restriction on the free plan');
-        console.warn('');
-        console.warn('💡 SOLUTIONS:');
-        console.warn('   1. Upgrade to Render Paid Plan ($7/month) - SMTP will work');
-        console.warn('   2. Use SendGrid (Free 100 emails/day) - Recommended');
-        console.warn('   3. Use Resend (Free 100 emails/day)');
-        console.warn('   4. Use AWS SES (Free 62,000 emails/month)');
-        console.warn('─'.repeat(60));
-        console.warn('📧 Email notifications disabled until SMTP access is available');
-        console.warn('');
-      } else if (error.code === 'EAUTH') {
-        console.error('⚠️  Authentication failed - verify credentials');
-      }
-      
-      // Don't throw - let the app continue without email
-      this.emailDisabled = true;
+      console.warn('⚠️  Email notifications will not be sent. Please check your EMAIL_USER and EMAIL_PASSWORD environment variables.');
+      console.warn('⚠️  Make sure to use the correct SMTP credentials from Hostinger.');
     }
   }
 
@@ -86,12 +37,6 @@ class EmailService {
    * @param {string} userName - The recipient's name
    */
   async sendWelcomeEmail(userEmail, userName) {
-    // Check if email is disabled
-    if (this.emailDisabled) {
-      console.warn('⚠️ Email service is disabled - skipping welcome email to:', userEmail);
-      return { success: false, error: 'Email service disabled (Render free tier SMTP blocked)' };
-    }
-
     const mailOptions = {
       from: {
         name: 'Sortyx Bin Monitoring',
@@ -121,12 +66,6 @@ class EmailService {
    * @param {object} alertDetails - Details about the alert
    */
   async sendAlertEmail(userEmail, userName, alertDetails) {
-    // Check if email is disabled
-    if (this.emailDisabled) {
-      console.warn('⚠️ Email service is disabled - skipping alert email to:', userEmail);
-      return { success: false, error: 'Email service disabled (Render free tier SMTP blocked)' };
-    }
-
     const mailOptions = {
       from: {
         name: 'Sortyx Bin Monitoring Alerts',

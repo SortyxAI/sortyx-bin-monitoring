@@ -872,11 +872,85 @@ export class FirebaseService {
       await setDoc(alertRef, dataToSave, { merge: true });
       
       logger.info(MODULE, `Alert saved: ${alertId}`);
+      
+      // Send email notification if user has email alerts enabled
+      this.sendAlertEmailNotification(dataToSave, userId).catch(err => 
+        logger.warn(MODULE, 'Failed to send alert email:', err.message)
+      );
+      
       return { id: alertId, ...dataToSave };
       
     } catch (error) {
       logger.error(MODULE, 'Error saving Alert:', error);
       throw error;
+    }
+  }
+
+  // Send email notification for alert
+  static async sendAlertEmailNotification(alertData, userId) {
+    try {
+      // Get user profile to check email alert preferences
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        logger.debug(MODULE, 'User not found, skipping email notification');
+        return;
+      }
+      
+      const userData = userDoc.data();
+      
+      // Check if user has email alerts enabled
+      if (!userData.email_alert_enabled) {
+        logger.debug(MODULE, 'Email alerts disabled for user, skipping notification');
+        return;
+      }
+      
+      const userEmail = userData.alert_email || userData.email;
+      if (!userEmail) {
+        logger.warn(MODULE, 'No email address found for user, skipping notification');
+        return;
+      }
+      
+      // Prepare alert details for email
+      const alertDetails = {
+        binName: alertData.binName || 'Smart Bin',
+        alertType: alertData.alert_type === 'fill_level' ? 'Fill Level Alert' : 'Alert',
+        message: alertData.message || 'Your bin requires attention',
+        severity: alertData.severity || 'info',
+        currentValue: alertData.currentValue,
+        threshold: alertData.threshold,
+        unit: alertData.unit || '%',
+        location: alertData.location || 'Unknown',
+        timestamp: alertData.created_at
+      };
+      
+      // Call backend API to send email
+      const backendUrl = import.meta.env?.VITE_API_URL || 'http://localhost:3001';
+      
+      logger.info(MODULE, `📧 Sending alert email to ${userEmail}`);
+      
+      const response = await fetch(`${backendUrl}/api/send-alert-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: userEmail,
+          userName: userData.full_name || userData.email?.split('@')[0] || 'User',
+          alertDetails
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Email API returned ${response.status}`);
+      }
+      
+      logger.success(MODULE, `✅ Alert email sent to ${userEmail}`);
+      
+    } catch (error) {
+      logger.error(MODULE, 'Error sending alert email notification:', error);
+      // Don't throw - email failure shouldn't break alert creation
     }
   }
 

@@ -106,9 +106,16 @@ class FirebaseAPIClient {
         body: JSON.stringify({ email, userName })
       });
 
+      const data = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.details || 'Failed to send welcome email');
+        throw new Error(data.details || data.error || 'Failed to send welcome email');
+      }
+
+      if (data.success === false) {
+        // Email service disabled (e.g., Render free tier) - not a critical error
+        console.warn('⚠️ Welcome email not sent:', data.message);
+        return false;
       }
 
       console.log('✅ Welcome email request successful');

@@ -51,31 +51,35 @@ export default function NotificationPreferences({ user, onUpdate }) {
   };
 
   return (
-    <Card className="overflow-hidden border-2 border-purple-100 dark:border-purple-700 dark:bg-[#241B3A]">
-      <CardHeader className="bg-gradient-to-r from-gray-800 to-gray-900 dark:from-gray-900 dark:to-black">
-        <CardTitle className="flex items-center gap-2">
-          <div className="p-2 bg-gray-700 dark:bg-gray-800 rounded-lg">
-            <Bell className="w-5 h-5 text-purple-400 dark:text-purple-300" />
+    <Card className="overflow-hidden shadow-xl border-2 border-purple-200 dark:border-purple-700 dark:bg-[#241B3A]">
+      <CardHeader className="bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 text-white border-b-4 border-blue-300 dark:border-blue-500 relative overflow-hidden">
+        <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+        <div className="absolute -top-24 -right-24 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+        
+        <CardTitle className="relative flex items-center gap-2">
+          <div className="p-2 bg-white/20 backdrop-blur-md rounded-lg shadow-lg border border-white/30">
+            <Bell className="w-5 h-5 text-white" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-white">
               Notification Preferences
             </h3>
-            <p className="text-sm text-gray-300 dark:text-gray-400 font-normal">
+            <p className="text-sm text-white/80 font-normal">
               Configure how you want to receive alerts
             </p>
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-6 space-y-6">
+      <CardContent className="p-6 space-y-6 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-blue-950/10 dark:via-[#1a1325] dark:to-purple-950/10">
         {/* Contact Information Section */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="space-y-4"
+          className="space-y-4 p-4 bg-gradient-to-r from-purple-50/50 via-blue-50/50 to-indigo-50/50 dark:from-purple-900/10 dark:via-blue-900/10 dark:to-indigo-900/10 rounded-lg border border-purple-200 dark:border-purple-700"
         >
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <h4 className="text-sm font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-2">
             <Phone className="w-4 h-4" />
             Contact Information
           </h4>
@@ -119,16 +123,16 @@ export default function NotificationPreferences({ user, onUpdate }) {
           </div>
         </motion.div>
 
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4" />
+        <div className="border-t-2 border-gradient-to-r from-purple-200 via-blue-200 to-indigo-200 dark:from-purple-700 dark:via-blue-700 dark:to-indigo-700 pt-4" />
 
         {/* Alert Channels Section */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="space-y-4"
+          className="space-y-4 p-4 bg-gradient-to-r from-blue-50/50 via-indigo-50/50 to-purple-50/50 dark:from-blue-900/10 dark:via-indigo-900/10 dark:to-purple-900/10 rounded-lg border border-blue-200 dark:border-blue-700"
         >
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-2">
             <Bell className="w-4 h-4" />
             Alert Channels
           </h4>
@@ -137,10 +141,10 @@ export default function NotificationPreferences({ user, onUpdate }) {
             {/* Email Alert Toggle */}
             <motion.div
               whileHover={{ scale: 1.01 }}
-              className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 ${
+              className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 shadow-md ${
                 emailAlert
-                  ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
-                  : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
+                  ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:bg-gradient-to-r dark:from-green-950/30 dark:to-emerald-950/30 border-green-300 dark:border-green-700"
+                  : "bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-purple-200 dark:border-purple-700"
               }`}
             >
               <div className="flex items-center gap-3 flex-1">
@@ -183,10 +187,10 @@ export default function NotificationPreferences({ user, onUpdate }) {
             {/* SMS Alert Toggle */}
             <motion.div
               whileHover={{ scale: 1.01 }}
-              className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 ${
+              className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 shadow-md ${
                 smsAlert
-                  ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
-                  : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
+                  ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:bg-gradient-to-r dark:from-green-950/30 dark:to-emerald-950/30 border-green-300 dark:border-green-700"
+                  : "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-700"
               }`}
             >
               <div className="flex items-center gap-3 flex-1">
@@ -229,10 +233,10 @@ export default function NotificationPreferences({ user, onUpdate }) {
             {/* WhatsApp Alert Toggle */}
             <motion.div
               whileHover={{ scale: 1.01 }}
-              className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 ${
+              className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 shadow-md ${
                 whatsappAlert
-                  ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
-                  : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
+                  ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:bg-gradient-to-r dark:from-green-950/30 dark:to-emerald-950/30 border-green-300 dark:border-green-700"
+                  : "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-indigo-200 dark:border-indigo-700"
               }`}
             >
               <div className="flex items-center gap-3 flex-1">
@@ -279,9 +283,9 @@ export default function NotificationPreferences({ user, onUpdate }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg"
+          className="mt-4 p-3 bg-gradient-to-r from-yellow-50 via-yellow-100 to-yellow-50 dark:from-yellow-950/30 dark:via-yellow-900/30 dark:to-yellow-950/30 border-2 border-yellow-300 dark:border-yellow-700 rounded-lg shadow-md"
         >
-          <p className="text-sm text-blue-700 dark:text-blue-300">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
             💡 Enable multiple channels to ensure you never miss important bin alerts
           </p>
         </motion.div>
