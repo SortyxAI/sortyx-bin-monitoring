@@ -304,13 +304,22 @@ Website: sortyx.com
    */
   getAlertEmailTemplate(userName, alertDetails) {
     const severityColors = {
-      critical: '#dc2626',
+      critical: '#dc2626',  // Red for critical
+      high: '#f97316',      // Orange for high
       warning: '#f59e0b',
       info: '#3b82f6'
     };
     
     const severity = alertDetails.severity || 'info';
     const color = severityColors[severity] || '#3b82f6';
+    
+    // Convert to Indian Standard Time (IST)
+    const timestamp = alertDetails.timestamp ? new Date(alertDetails.timestamp) : new Date();
+    const istTime = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'full',
+      timeStyle: 'long'
+    }).format(timestamp);
 
     return `
 <!DOCTYPE html>
@@ -372,8 +381,12 @@ Website: sortyx.com
       <div class="alert-box">
         <h3>${alertDetails.binName || 'Smart Bin'}</h3>
         <p><strong>Alert Type:</strong> ${alertDetails.alertType || 'Notification'}</p>
+        <p><strong>Severity:</strong> <span style="color: ${color}; font-weight: bold; text-transform: uppercase;">${severity}</span></p>
         <p><strong>Message:</strong> ${alertDetails.message || 'Your bin requires attention'}</p>
-        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+        <p><strong>Current Level:</strong> ${alertDetails.currentValue || 'N/A'}${alertDetails.unit || '%'} ${alertDetails.threshold ? `(Threshold: ${alertDetails.threshold}${alertDetails.unit || '%'})` : ''}</p>
+        <p><strong>Sensor Type:</strong> ${alertDetails.sensorType || 'Ultrasonic Distance Sensor'}</p>
+        <p><strong>Location:</strong> ${alertDetails.location || 'Unknown'}</p>
+        <p><strong>Time (IST):</strong> ${istTime}</p>
       </div>
       <p>Please check your dashboard for more details.</p>
     </div>
@@ -390,6 +403,13 @@ Website: sortyx.com
    * Plain text version of alert email
    */
   getAlertEmailTextVersion(userName, alertDetails) {
+    const timestamp = alertDetails.timestamp ? new Date(alertDetails.timestamp) : new Date();
+    const istTime = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'full',
+      timeStyle: 'long'
+    }).format(timestamp);
+    
     return `
 Smart Bin Alert
 
@@ -398,8 +418,12 @@ Hello ${userName},
 Alert Details:
 - Bin: ${alertDetails.binName || 'Smart Bin'}
 - Type: ${alertDetails.alertType || 'Notification'}
+- Severity: ${(alertDetails.severity || 'info').toUpperCase()}
 - Message: ${alertDetails.message || 'Your bin requires attention'}
-- Time: ${new Date().toLocaleString()}
+- Current Level: ${alertDetails.currentValue || 'N/A'}${alertDetails.unit || '%'} ${alertDetails.threshold ? `(Threshold: ${alertDetails.threshold}${alertDetails.unit || '%'})` : ''}
+- Sensor Type: ${alertDetails.sensorType || 'Ultrasonic Distance Sensor'}
+- Location: ${alertDetails.location || 'Unknown'}
+- Time (IST): ${istTime}
 
 Please check your dashboard for more details.
 

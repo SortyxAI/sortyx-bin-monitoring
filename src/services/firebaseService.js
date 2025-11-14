@@ -889,6 +889,12 @@ export class FirebaseService {
   // Send email notification for alert
   static async sendAlertEmailNotification(alertData, userId) {
     try {
+      // Only send emails for HIGH and CRITICAL alerts, skip MEDIUM
+      if (alertData.severity === 'medium') {
+        logger.debug(MODULE, 'Skipping email for medium severity alert');
+        return;
+      }
+      
       // Get user profile to check email alert preferences
       const userRef = doc(db, 'users', userId);
       const userDoc = await getDoc(userRef);
@@ -921,6 +927,7 @@ export class FirebaseService {
         currentValue: alertData.currentValue,
         threshold: alertData.threshold,
         unit: alertData.unit || '%',
+        sensorType: alertData.sensorType || 'Ultrasonic Distance Sensor',
         location: alertData.location || 'Unknown',
         timestamp: alertData.created_at
       };
