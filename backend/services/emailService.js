@@ -4,23 +4,29 @@ class EmailService {
   constructor() {
     // Log environment check
     console.log('🔧 Initializing Email Service...');
-    console.log('📧 EMAIL_USER:', process.env.EMAIL_USER || 'admin@sortyx.com (fallback)');
-    console.log('🔑 EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD ? '****' + process.env.EMAIL_PASSWORD.slice(-4) : 'Using fallback');
-    console.log('🌐 EMAIL_HOST:', process.env.EMAIL_HOST || 'smtp.hostinger.com (fallback)');
-    console.log('🔌 EMAIL_PORT:', process.env.EMAIL_PORT || '587 (fallback)');
+    
+    // Email credentials with direct fallback values
+    const emailUser ='admin@sortyx.com';
+    const emailPassword ='Admin@Sortyx2025!';
+    const emailHost ='smtp.hostinger.com';
+    const emailPort = 587
+    
+    console.log('📧 EMAIL_USER:', emailUser);
+    console.log('🔑 EMAIL_PASSWORD:', '****' + emailPassword.slice(-4));
+    console.log('🌐 EMAIL_HOST:', emailHost);
+    console.log('🔌 EMAIL_PORT:', emailPort);
     
     // Configure the SMTP transporter with environment variables
     // Supports both Hostinger and other SMTP providers
-    const emailPort = Number(process.env.EMAIL_PORT || 587);
     const isSecurePort = emailPort === 465;
     
     this.transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || 'smtp.hostinger.com',
+      host: emailHost,
       port: emailPort,
       secure: isSecurePort, // true for 465, false for other ports
       auth: {
-        user: process.env.EMAIL_USER || 'admin@sortyx.com',
-        pass: process.env.EMAIL_PASSWORD || 'Admin@Sortyx2025!'
+        user: emailUser,
+        pass: emailPassword
       },
       tls: {
         rejectUnauthorized: false // Only if needed temporarily for self-signed certs
