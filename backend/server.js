@@ -3,7 +3,8 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
-require('dotenv').config({ path: '../.env' });
+const emailService = require('./services/emailService');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -92,6 +93,55 @@ app.post('/auth/login', async (req, res) => {
     const { password: _, ...userWithoutPassword } = user;
     res.json({ token, user: userWithoutPassword });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/auth/register', async (req, res) => {
+  try {
+    const { email, password, fullName } = req.body;
+    
+    // Check if user already exists
+    const existingUser = users.find(u => u.email === email);
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    // Create new user
+    const newUser = {
+      id: uuidv4(),
+      email: email,
+      password: bcrypt.hashSync(password, 10),
+      full_name: fullName || email.split('@')[0],
+      plan: 'free',
+      subscription_plan: 'free',
+      role: 'user',
+      smartbin_order: [],
+      created_at: new Date().toISOString()
+    };
+
+    users.push(newUser);
+    
+    // Send welcome email (non-blocking)
+    emailService.sendWelcomeEmail(email, newUser.full_name)
+      .then(() => console.log('✅ Welcome email sent to:', email))
+      .catch(err => console.error('❌ Failed to send welcome email:', err.message));
+
+    // Generate token
+    const token = jwt.sign(
+      { id: newUser.id, email: newUser.email },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    const { password: _, ...userWithoutPassword } = newUser;
+    res.status(201).json({ 
+      token, 
+      user: userWithoutPassword,
+      message: 'Registration successful! Welcome email sent.'
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -215,6 +265,41 @@ app.get('/api/subscription-plans', authenticateToken, (req, res) => {
     res.json(subscriptionPlans);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Email notification routes (no auth required for welcome email on registration)
+app.post('/api/send-welcome-email', async (req, res) => {
+  try {
+    const { email, userName } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    console.log(`📧 Sending welcome email to: ${email} (${userName})`);
+    await emailService.sendWelcomeEmail(email, userName || 'User');
+    console.log(`✅ Welcome email sent successfully to: ${email}`);
+    res.json({ success: true, message: 'Welcome email sent successfully' });
+  } catch (error) {
+    console.error('❌ Error sending welcome email:', error);
+    res.status(500).json({ error: 'Failed to send email', details: error.message });
+  }
+});
+
+app.post('/api/send-alert-email', authenticateToken, async (req, res) => {
+  try {
+    const { email, userName, alertDetails } = req.body;
+    
+    if (!email || !alertDetails) {
+      return res.status(400).json({ error: 'Email and alert details are required' });
+    }
+
+    await emailService.sendAlertEmail(email, userName || 'User', alertDetails);
+    res.json({ success: true, message: 'Alert email sent successfully' });
+  } catch (error) {
+    console.error('Error sending alert email:', error);
+    res.status(500).json({ error: 'Failed to send email', details: error.message });
   }
 });
 

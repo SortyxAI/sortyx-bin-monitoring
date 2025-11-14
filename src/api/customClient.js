@@ -70,15 +70,53 @@ class FirebaseAPIClient {
         subscription_plan: 'free',
         applicationId: null,
         smartbin_order: [],
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        isNewUser: true // Flag for welcome email
       });
       
       console.log('✅ User registered successfully:', email);
       
-      return await this.login(email, password);
+      // Login first to get the token
+      const loginResult = await this.login(email, password);
+      
+      // Send welcome email after login (non-blocking)
+      this.sendWelcomeEmail(email, fullName || email.split('@')[0], firebaseUser)
+        .then(() => console.log('✅ Welcome email sent'))
+        .catch(err => console.warn('⚠️ Welcome email failed:', err.message));
+      
+      return loginResult;
     } catch (error) {
       console.error('❌ Registration error:', error);
       throw new Error(error.message || 'Registration failed.');
+    }
+  }
+
+  // Send welcome email via backend
+  async sendWelcomeEmail(email, userName, firebaseUser = null) {
+    try {
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      
+      console.log(`📧 Requesting welcome email for: ${email}`);
+      
+      const response = await fetch(`${backendUrl}/api/send-welcome-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, userName })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.details || 'Failed to send welcome email');
+      }
+
+      console.log('✅ Welcome email request successful');
+      return true;
+    } catch (error) {
+      console.error('❌ Error sending welcome email:', error);
+      // Don't throw - email is not critical for registration
+      return false;
     }
   }
 

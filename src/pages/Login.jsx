@@ -108,8 +108,24 @@ export default function Login({ onLogin }) {
       
       console.log('Google login successful:', user);
       
+      // Check if this is a new user (first time Google sign-in)
+      const isNewUser = result._tokenResponse?.isNewUser || false;
+      
       // Create/update user profile in Firestore
       const userProfile = await User.me();
+      
+      // Send welcome email for new users
+      if (isNewUser) {
+        console.log('🎉 New user detected, sending welcome email...');
+        // Use the sendWelcomeEmail from the client
+        const customClient = await import('../api/customClient');
+        customClient.customBase44.client.sendWelcomeEmail(
+          user.email,
+          user.displayName || user.email.split('@')[0],
+          user
+        ).catch(err => console.warn('⚠️ Welcome email failed:', err));
+      }
+      
       onLogin(userProfile);
     } catch (error) {
       console.error('Google login error:', error);
