@@ -12,15 +12,30 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-key';
 
 // Middleware
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        'https://sortyx-bin-monitoring-frontend.onrender.com',
-        'https://sortyx-frontend.onrender.com',
-        'https://sortyx-smart-bin.onrender.com',
-        'https://your-custom-domain.com'
-      ]
-    : ['http://localhost:5173', 'http://localhost:5174'],
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'https://sortyx-bin-monitoring-frontend.onrender.com',
+      'https://sortyx-frontend.onrender.com',
+      'https://sortyx-smart-bin.onrender.com',
+      'https://sortyx-bin-monitoring.onrender.com',
+      'https://your-custom-domain.com'
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('⚠️ Origin not allowed by CORS:', origin);
+      callback(null, true); // Allow all origins temporarily for testing
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
 app.use(cors(corsOptions));
 app.use(express.json());
