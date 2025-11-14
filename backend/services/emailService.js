@@ -8,17 +8,20 @@ class EmailService {
     console.log('🔑 EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD ? '****' + process.env.EMAIL_PASSWORD.slice(-4) : 'Using fallback');
     
     // Configure the SMTP transporter with Hostinger settings
+    // Using port 587 (TLS) instead of 465 (SSL) as Render may block port 465
     this.transporter = nodemailer.createTransport({
       host: 'smtp.hostinger.com',
-      port: 465,
-      secure: true, // SSL
+      port: 587, // Changed from 465 to 587 for better compatibility with Render
+      secure: false, // Use STARTTLS instead of SSL
       auth: {
         user: process.env.EMAIL_USER || 'admin@sortyx.com',
         pass: process.env.EMAIL_PASSWORD || 'Admin@Sortyx2025!'
       },
       tls: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
+        ciphers: 'SSLv3'
       },
+      requireTLS: true,
       connectionTimeout: 10000, // 10 seconds
       greetingTimeout: 10000,
       socketTimeout: 10000
@@ -32,20 +35,21 @@ class EmailService {
     try {
       await this.transporter.verify();
       console.log('✅ Email service is ready to send emails');
-      console.log('✅ Connected to SMTP server: smtp.hostinger.com:465');
+      console.log('✅ Connected to SMTP server: smtp.hostinger.com:587 (TLS)');
     } catch (error) {
       console.error('❌ Email service connection error:', error.message);
-      console.warn('⚠️  Email notifications will not be sent. Please check your EMAIL_USER and EMAIL_PASSWORD environment variables.');
-      console.warn('⚠️  Make sure to use the correct SMTP credentials from Hostinger.');
-      console.warn('⚠️  Note: Render.com requires environment variables to be set in the dashboard, not just in .env file');
-      console.warn('⚠️  Go to: Dashboard → Your Service → Environment → Add Environment Variables');
+      console.error('❌ Error code:', error.code);
+      console.warn('⚠️  Email notifications will not be sent.');
+      console.warn('⚠️  Note: Render.com requires environment variables to be set in the dashboard');
+      console.warn('⚠️  Go to: Dashboard → Your Service → Environment → Add these:');
+      console.warn('     EMAIL_USER=admin@sortyx.com');
+      console.warn('     EMAIL_PASSWORD=Admin@Sortyx2025!');
       
-      // Log full error details for debugging
+      // Log full error for debugging
       if (error.code === 'ETIMEDOUT') {
-        console.error('⚠️  Connection timeout - Render may be blocking SMTP port 465');
-        console.warn('💡 Try setting these in Render Dashboard:');
-        console.warn('   EMAIL_USER=admin@sortyx.com');
-        console.warn('   EMAIL_PASSWORD=Admin@Sortyx2025!');
+        console.error('⚠️  Connection timeout - check if SMTP port 587 is accessible');
+      } else if (error.code === 'EAUTH') {
+        console.error('⚠️  Authentication failed - verify credentials in Render dashboard');
       }
     }
   }
