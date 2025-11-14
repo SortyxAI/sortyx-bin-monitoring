@@ -2,39 +2,18 @@ const nodemailer = require('nodemailer');
 
 class EmailService {
   constructor() {
-    // Log environment check
-    console.log('🔧 Initializing Email Service...');
-    
-    // Email credentials with direct fallback values
-    const emailUser ='admin@sortyx.com';
-    const emailPassword ='Admin@Sortyx2025!';
-    const emailHost ='smtp.hostinger.com';
-    const emailPort = 587
-    
-    console.log('📧 EMAIL_USER:', emailUser);
-    console.log('🔑 EMAIL_PASSWORD:', '****' + emailPassword.slice(-4));
-    console.log('🌐 EMAIL_HOST:', emailHost);
-    console.log('🔌 EMAIL_PORT:', emailPort);
-    
-    // Configure the SMTP transporter with environment variables
-    // Supports both Hostinger and other SMTP providers
-    const isSecurePort = emailPort === 465;
-    
+    // Configure the SMTP transporter with Hostinger settings
     this.transporter = nodemailer.createTransport({
-      host: emailHost,
-      port: emailPort,
-      secure: isSecurePort, // true for 465, false for other ports
+      host: 'smtp.hostinger.com',
+      port: 465,
+      secure: true, // SSL
       auth: {
-        user: emailUser,
-        pass: emailPassword
+        user: process.env.EMAIL_USER || 'admin@sortyx.com',
+        pass: process.env.EMAIL_PASSWORD || 'Admin@Sortyx2025!'
       },
       tls: {
-        rejectUnauthorized: false // Only if needed temporarily for self-signed certs
-      },
-      requireTLS: !isSecurePort, // Use STARTTLS for non-secure ports
-      connectionTimeout: 10000, // 10 seconds
-      greetingTimeout: 10000,
-      socketTimeout: 10000
+        rejectUnauthorized: false
+      }
     });
 
     // Verify the connection on initialization
@@ -44,29 +23,11 @@ class EmailService {
   async verifyConnection() {
     try {
       await this.transporter.verify();
-      const emailPort = process.env.EMAIL_PORT || 587;
-      const emailHost = process.env.EMAIL_HOST || 'smtp.hostinger.com';
       console.log('✅ Email service is ready to send emails');
-      console.log(`✅ Connected to SMTP server: ${emailHost}:${emailPort}`);
     } catch (error) {
       console.error('❌ Email service connection error:', error.message);
-      console.error('❌ Error code:', error.code);
-      console.warn('⚠️  Email notifications will not be sent.');
-      console.warn('⚠️  Note: Render.com requires environment variables to be set in the dashboard');
-      console.warn('⚠️  Go to: Dashboard → Your Service → Environment → Add these:');
-      console.warn('     EMAIL_HOST=smtp.hostinger.com');
-      console.warn('     EMAIL_PORT=587');
-      console.warn('     EMAIL_USER=admin@sortyx.com');
-      console.warn('     EMAIL_PASSWORD=Admin@Sortyx2025!');
-      
-      // Log full error for debugging
-      if (error.code === 'ETIMEDOUT') {
-        console.error('⚠️  Connection timeout - check if SMTP server is accessible');
-      } else if (error.code === 'EAUTH') {
-        console.error('⚠️  Authentication failed - verify credentials in Render dashboard');
-      } else if (error.code === 'ECONNREFUSED') {
-        console.error('⚠️  Connection refused - check EMAIL_HOST and EMAIL_PORT');
-      }
+      console.warn('⚠️  Email notifications will not be sent. Please check your EMAIL_USER and EMAIL_PASSWORD environment variables.');
+      console.warn('⚠️  Make sure to use the correct SMTP credentials from Hostinger.');
     }
   }
 
