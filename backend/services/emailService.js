@@ -66,13 +66,24 @@ class EmailService {
    * @param {object} alertDetails - Details about the alert
    */
   async sendAlertEmail(userEmail, userName, alertDetails) {
+    // Construct subject with severity prefix
+    const severityPrefix = alertDetails.severity === 'critical' 
+      ? 'CRITICAL' 
+      : alertDetails.severity === 'high' 
+        ? 'HIGH' 
+        : '';
+    
+    const subject = severityPrefix 
+      ? `🚨 ${severityPrefix} - ${alertDetails.binName || 'Smart Bin'} - ${alertDetails.alertType || 'Alert'}`
+      : `🚨 Alert: ${alertDetails.binName || 'Smart Bin'} - ${alertDetails.alertType || 'Alert'}`;
+
     const mailOptions = {
       from: {
         name: 'Sortyx Bin Monitoring Alerts',
         address: process.env.EMAIL_USER || 'admin@sortyx.com'
       },
       to: userEmail,
-      subject: `🚨 Alert: ${alertDetails.binName || 'Smart Bin'} - ${alertDetails.alertType || 'Notification'}`,
+      subject: subject,
       html: this.getAlertEmailTemplate(userName, alertDetails),
       text: this.getAlertEmailTextVersion(userName, alertDetails)
     };
